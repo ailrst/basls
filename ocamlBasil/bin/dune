@@ -1,0 +1,11 @@
+(executable
+ (public_name ocamlBasil)
+ (name main)
+ (flags
+  (-w -27 -w -39 -w -33))
+ (modules main visitor basilVisitor)
+ (preprocess (pps ppx_deriving.show))
+ (libraries BasilIR
+  linol
+  linol-lwt
+  lsp))

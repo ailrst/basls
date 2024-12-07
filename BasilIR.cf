@@ -1,0 +1,158 @@
+Prog . Program ::= [Declaration] ;
+
+separator Declaration ";";
+
+token BVTYPE ('b' 'v' digit+) ;
+
+position token BIdent ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*);
+token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
+token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
+
+separator BIdent "," ;
+
+comment "//" ;
+comment "/*" "*/" ;
+
+LetDecl . Declaration ::= "let" BIdent "=" MExpr ;
+MemDecl . Declaration ::= "memory" BIdent ":" Type ;
+VarDecl . Declaration ::= "var" BIdent ":" Type  ;
+
+MSym . MExpr ::= BIdent ;
+
+IntT . IntType ::= "int" ;
+BoolT . BoolType ::= "bool" ;
+MapT . MapType ::= "map" Type "[" Type "]" ;
+ShortBVT . BVType ::= BVTYPE ;
+BitvectorType . BVType ::= "bv" IntLit ;
+
+rules Type ::= IntType | BoolType | MapType | BVType ; 
+
+separator Expr "," ;
+
+HexInt . IntLit ::= IntegerHex ;
+DecInt . IntLit ::=  Integer ;
+
+AddrAttrSome . AddrAttr ::= "{" "address" "=" IntLit "}" ;
+AddrAttrNone . AddrAttr ::= ""  ;
+AddrAttrEmpty . AddrAttr ::= "{" "}" ;
+
+LittleEndian . Endian ::= "le" ;
+BigEndian . Endian ::= "be" ;
+
+terminator Statement ";";
+
+AssignStmt . Statement ::=  Assign ;
+
+IntAssign . Assign ::= IntLVar ":=" IntExpr ;
+BVAssign . Assign ::= BVLVar ":=" BVExpr ;
+BoolAssign . Assign ::= BoolLVar ":=" LogExpr ;
+
+SLoad . Statement ::= BVLVar ":=" "load" Endian BIdent BVExpr IntLit;
+SStore . Statement ::= "store" Endian BIdent Expr BVExpr IntLit;
+
+
+DirectCall . Statement ::= "call" BIdent "(" [Expr] ")" ;
+DirectCallReturnLocal . Statement ::= "var" "(" [ LVar ] ")" ":=" "call" BIdent "(" [Expr] ")" ;
+DirectCallReturn . Statement ::= "(" [ LVar ] ")" ":=" "call" BIdent "(" [Expr] ")" ;
+IndirectCall . Statement ::= "indirect" "call" Expr ;
+
+Assume . Statement ::= "assume" Expr ;
+Assert . Statement ::= "assert" Expr ;
+
+GoTo . Jump ::= "goto" "(" [BIdent] ")" ;
+Unreachable . Jump ::= "unreachable" ;
+Return . Jump ::= "return" "(" [Expr] ")" ;
+
+rules LVar ::= IntLVar | BVLVar | BoolLVar ;
+
+LocalBVLVar   . BVLVar ::= "var" BIdent ":" BVType;
+LocalIntLVar  . IntLVar  ::= "var" BIdent ":" IntType;
+LocalBoolLVar . BoolLVar ::= "var" BIdent ":" BoolType;
+
+GlobalBVLVar   . BVLVar ::= BIdent ":" BVType ;
+GlobalIntLVar  . IntLVar ::= BIdent ":" IntType ;
+GlobalBoolLVar . BoolLVar ::= BIdent ":" BoolType ;
+
+separator LVar "," ;
+
+separator Block ";" ;
+BlockM . MExpr ::= Block ;
+B . Block ::= "block" BIdent AddrAttr "[" 
+  [Statement] Jump
+  "]" ;
+
+
+EntrySome . PEntry ::=  "entry" "=" Block ";" ;
+EntryNone . PEntry ::= "";
+
+ESome . PExit ::=  "exit" "=" Block ";";
+ENone . PExit ::= "";
+
+AddrSome . PAddress ::=  "address" "=" IntLit ";" ;
+AddrNone . PAddress ::= "";
+
+BSome . InternalBlocks ::=  "blocks" "=" "[" [Block] "]" ";";
+BNone . InternalBlocks ::= "";
+
+PD . ProcDef ::= "{" 
+  "name" "=" Str ";"
+  PAddress
+  PEntry 
+  PExit 
+  InternalBlocks
+"}" ;
+
+
+Param . Params ::=  BIdent ":" Type ;
+separator Params "," ;
+
+Procedure . Declaration ::= "proc" BIdent "(" [Params] ")" "->" "(" [Params] ")"  ProcDef ;
+
+BitvectorExpr . Expr ::=  BVExpr;
+LogicalExpr   . Expr ::=  LogExpr;
+IntegerExpr   . Expr ::=  IntExpr;
+
+_ . BVExpr   ::= "(" BVExpr ")" ;
+_ . IntExpr  ::= "(" IntExpr ")" ;
+_ . LogExpr ::= "(" LogExpr ")" ;
+
+BVBinary    . BVExpr    ::= BVBinOp "(" BVExpr "," BVExpr ")" ;
+BVUnary     . BVExpr    ::= BVUnOp "(" BVExpr ")" ;
+ZeroExtend . BVExpr ::= "zero_extend" "(" IntLit "," BVExpr ")" ;
+SignExtend . BVExpr ::= "sign_extend" "(" IntLit "," BVExpr ")" ;
+Extract    . BVExpr ::= "extract" "(" IntLit "," IntLit "," BVExpr ")" ;
+Concat     . BVExpr ::= "bvconcat" "(" BVExpr "," BVExpr ")" ;
+BVLiteral . BVExpr ::=  IntLit ":" BVType ;
+
+BVLogBinary . LogExpr   ::= BVLogicalBinOp "(" BVExpr "," BVExpr ")" ;
+
+
+IntLiteral . IntExpr ::= IntLit;
+
+IRV . IntRVar ::= BIdent ":" IntType;
+BVRV . BVRVar ::= BIdent ":" BVType;
+BRV . BoolRVar ::= BIdent ":" BoolType;
+
+RBVVar . BVExpr ::= BVRVar ;
+RIntVar . IntExpr ::= IntRVar;
+RLogVar . LogExpr ::= BoolRVar ;
+
+rules BoolLiteral ::= "true" | "false" ;
+BoolLit . LogExpr ::= BoolLiteral;
+
+rules BVUnOp ::= "bvnot" | "bvneg" ;
+rules BVBinOp ::= "bvand"|"bvor"|"bvadd"|"bvmul"|"bvudiv"|"bvurem"|"bvshl"|"bvlshr"|"bvnand"|"bvnor"
+  |"bvxor"|"bvxnor"|"bvcomp"|"bvsub"|"bvsdiv"|"bvsrem"|"bvsmod"|"bvashr";
+rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" |  "bvslt" |  "bvsle" |  "bvsgt" |  "bvsge" |  "bveq"  |  "bvneq" | "bvult" ;
+
+rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
+rules IntLogicalBinOp ::=  "inteq" | "intneq"| "intlt" | "intle" | "intgt" | "intge" ;
+rules BoolBinOp ::=  "booleq" | "boolneq" | "booland" | "boolor" | "boolimplies" | "boolequiv" ;
+
+IntLogBinary . LogExpr      ::= IntLogicalBinOp "(" IntExpr "," IntExpr ")" ;
+IntBinary    . IntExpr      ::= IntBinOp "(" IntExpr "," IntExpr ")" ;
+IntNeg       . IntExpr      ::= "intneg" "(" IntExpr ")" ;
+
+
+BoolLogBinOp . LogExpr ::= BoolBinOp "(" LogExpr "," LogExpr ")" ;
+BoolNot . LogExpr ::= "boolnot" "(" LogExpr ")" ;
