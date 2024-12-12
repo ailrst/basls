@@ -13,18 +13,17 @@ let log (s : string) =
   output_string oc (s ^ "\n");
   flush oc
 
-let get_begin_line (linebreaks : IntSet.t) (char_pos : int) =
-  match IntSet.find_last_opt (fun l -> l <= char_pos) linebreaks with
-  | Some l -> l
+(* offset -> linenum *)
+type linebreaks = int IntMap.t
+
+let get_begin_line (linebreaks : linebreaks) (char_pos : int) =
+  match IntMap.find_last_opt (fun l -> l <= char_pos) linebreaks with
+  | Some (charpos, x) -> charpos
   | None -> 0
 
-let get_linenum (linebreaks : IntSet.t) (char_pos : int) =
-  (*TODO not very efficient *)
-  let bl = get_begin_line linebreaks char_pos in
-  IntSet.to_seq linebreaks
-  |> Seq.find_mapi (fun i ln -> if ln = bl then Some i else None)
-  |> function
-  | Some x -> x
+let get_linenum (linebreaks : linebreaks) (char_pos : int) =
+  match IntMap.find_last_opt (fun l -> l <= char_pos) linebreaks with
+  | Some (charpos, linenum) -> linenum
   | None -> 0
 
 module LineCol = struct
@@ -86,8 +85,8 @@ type def_info = {
   range_end : LineCol.t;
 }
 
-let range_of_position (linebreaks : IntSet.t) (p1 : position) (p2 : position)
-    : Lsp.Types.Range.t =
+let range_of_position (linebreaks : linebreaks) (p1 : position)
+    (p2 : position) : Lsp.Types.Range.t =
   let lsp_position (p : position) =
     let begin_line = get_begin_line linebreaks p.pos_cnum in
     Lsp.Types.Position.create ~character:(p.pos_cnum - begin_line)
@@ -95,7 +94,7 @@ let range_of_position (linebreaks : IntSet.t) (p1 : position) (p2 : position)
   in
   Lsp.Types.Range.create ~end_:(lsp_position p2) ~start:(lsp_position p1)
 
-let token_of_char_range (linebreaks : IntSet.t) (p1 : int) (p2 : int) :
+let token_of_char_range (linebreaks : linebreaks) (p1 : int) (p2 : int) :
     Token.t =
   let begin_line = get_begin_line linebreaks p1 in
   let line_no = get_linenum linebreaks p1 in
@@ -103,27 +102,27 @@ let token_of_char_range (linebreaks : IntSet.t) (p1 : int) (p2 : int) :
   let size = p2 - p1 in
   Token.create line_no column size
 
-let token_of_bident (linebreaks : IntSet.t) (id : AbsBasilIR.bIdent) :
+let token_of_bident (linebreaks : linebreaks) (id : AbsBasilIR.bIdent) :
     Token.t =
   match id with
   | AbsBasilIR.BIdent ((b, e), n) -> token_of_char_range linebreaks b e
 
-let loc_of_char_pos (linebreaks : IntSet.t) p : LineCol.t =
+let loc_of_char_pos (linebreaks : linebreaks) p : LineCol.t =
   LineCol.create (get_linenum linebreaks p) (p - get_begin_line linebreaks p)
 
-let loc_of_beginrec (linebreaks : IntSet.t) id : LineCol.t =
+let loc_of_beginrec (linebreaks : linebreaks) id : LineCol.t =
   match id with
   | AbsBasilIR.BeginRec ((b, e), n) -> loc_of_char_pos linebreaks b
 
-let loc_of_endrec (linebreaks : IntSet.t) id : LineCol.t =
+let loc_of_endrec (linebreaks : linebreaks) id : LineCol.t =
   match id with
   | AbsBasilIR.EndRec ((b, e), n) -> loc_of_char_pos linebreaks e
 
-let loc_of_beginlist (linebreaks : IntSet.t) id : LineCol.t =
+let loc_of_beginlist (linebreaks : linebreaks) id : LineCol.t =
   match id with
   | AbsBasilIR.BeginList ((b, e), n) -> loc_of_char_pos linebreaks b
 
-let loc_of_endlist (linebreaks : IntSet.t) id : LineCol.t =
+let loc_of_endlist (linebreaks : linebreaks) id : LineCol.t =
   match id with
   | AbsBasilIR.EndList ((b, e), n) -> loc_of_char_pos linebreaks e
 
@@ -202,16 +201,22 @@ module Processor = struct
   let unpack_ident id linebreaks =
     match id with BIdent (_, n) -> (token_of_bident linebreaks id, n)
 
-  let linebreaks (s : string) : IntSet.t =
+  let linebreaks (s : string) : linebreaks =
+    let count = ref 0 in
     let breaks =
       Seq.filter_map
         (* next char is beginning of a line *)
-          (fun (i, c) -> match c with '\n' -> Some (i + 1) | _ -> None)
+          (fun (i, c) ->
+          match c with
+          | '\n' ->
+              count := !count + 1;
+              Some (i + 1, !count)
+          | _ -> None)
         (String.to_seqi s)
     in
-    IntSet.add 0 @@ IntSet.add_seq breaks IntSet.empty
+    IntMap.add 0 0 @@ IntMap.add_seq breaks IntMap.empty
 
-  class getBlocks (linebreaks : IntSet.t) =
+  class getBlocks (linebreaks : linebreaks) =
     object
       (* procid, blockid *)
       val mutable current_proc : string option = None
@@ -298,7 +303,7 @@ module Processor = struct
             DoChildren
     end
 
-  let get_symbs (linebreaks : IntSet.t) (p : program) =
+  let get_symbs (linebreaks : linebreaks) (p : program) =
     let vis = new getBlocks linebreaks in
     let _ = visit_prog vis p in
     {
@@ -327,7 +332,7 @@ type doc_ast =
   | SyntaxError of (string * position * position)
   | Ast of AbsBasilIR.program * Processor.symbs
 
-type state_after_processing = { linebreaks : IntSet.t; ast : doc_ast }
+type state_after_processing = { linebreaks : linebreaks; ast : doc_ast }
 
 let process (s : string) : state_after_processing =
   let lexbuf = Lexing.from_string s in
@@ -464,11 +469,9 @@ let run () =
 
 let () =
   Printexc.record_backtrace true;
-  Printexc.register_printer (function
-    | e ->
-        Some
-          (Printexc.print_backtrace oc;
-           "")
-    | _ -> None);
+  Printexc.register_printer (function e ->
+      Some
+        (Printexc.print_backtrace oc;
+         ""));
   run ()
 (* Finally, we actually run the server *)
