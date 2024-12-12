@@ -64,8 +64,8 @@ and statement =
 
 and callLVars =
    NoOutParams
- | LocalVars of lVar list
  | ListOutParams of lVar list
+ | LocalVars of lVar list
 
 and jump =
    GoTo of bIdent list

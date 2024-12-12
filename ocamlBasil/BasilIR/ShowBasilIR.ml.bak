@@ -115,8 +115,8 @@ and showStatement (e : AbsBasilIR.statement) : showable = match e with
 
 and showCallLVars (e : AbsBasilIR.callLVars) : showable = match e with
        AbsBasilIR.NoOutParams  -> s2s "NoOutParams"
-  |    AbsBasilIR.LocalVars lvars -> s2s "LocalVars" >> c2s ' ' >> c2s '(' >> showList showLVar lvars >> c2s ')'
   |    AbsBasilIR.ListOutParams lvars -> s2s "ListOutParams" >> c2s ' ' >> c2s '(' >> showList showLVar lvars >> c2s ')'
+  |    AbsBasilIR.LocalVars lvars -> s2s "LocalVars" >> c2s ' ' >> c2s '(' >> showList showLVar lvars >> c2s ')'
 
 
 and showJump (e : AbsBasilIR.jump) : showable = match e with

@@ -111,8 +111,8 @@ and transStatement (x : statement) : result = match x with
 
 and transCallLVars (x : callLVars) : result = match x with
     NoOutParams  -> failure x
-  | LocalVars lvars -> failure x
   | ListOutParams lvars -> failure x
+  | LocalVars lvars -> failure x
 
 
 and transJump (x : jump) : result = match x with

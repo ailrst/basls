@@ -10,9 +10,8 @@ module IntSet = Set.Make (Int)
 let oc = open_out "logger"
 
 let log (s : string) =
-  (* output_string oc s;
-  flush oc *)
-  ()
+  output_string oc (s ^ "\n");
+  flush oc
 
 let get_begin_line (linebreaks : IntSet.t) (char_pos : int) =
   match IntSet.find_last_opt (fun l -> l <= char_pos) linebreaks with
@@ -20,6 +19,7 @@ let get_begin_line (linebreaks : IntSet.t) (char_pos : int) =
   | None -> 0
 
 let get_linenum (linebreaks : IntSet.t) (char_pos : int) =
+  (*TODO not very efficient *)
   let bl = get_begin_line linebreaks char_pos in
   IntSet.to_seq linebreaks
   |> Seq.find_mapi (fun i ln -> if ln = bl then Some i else None)
@@ -42,6 +42,9 @@ module LineCol = struct
 
   let to_position p =
     Linol_lwt.Position.create ~line:(fst p) ~character:(snd p)
+
+  let range (b : t) (e : t) =
+    Linol_lwt.Range.create ~start:(to_position b) ~end_:(to_position e)
 end
 
 module Token = struct
@@ -76,6 +79,13 @@ module StringMap = struct
   let pp = to_string
 end
 
+type def_info = {
+  label : string;
+  label_tok : Token.t;
+  range_start : LineCol.t;
+  range_end : LineCol.t;
+}
+
 let range_of_position (linebreaks : IntSet.t) (p1 : position) (p2 : position)
     : Lsp.Types.Range.t =
   let lsp_position (p : position) =
@@ -98,8 +108,27 @@ let token_of_bident (linebreaks : IntSet.t) (id : AbsBasilIR.bIdent) :
   match id with
   | AbsBasilIR.BIdent ((b, e), n) -> token_of_char_range linebreaks b e
 
+let loc_of_char_pos (linebreaks : IntSet.t) p : LineCol.t =
+  LineCol.create (get_linenum linebreaks p) (p - get_begin_line linebreaks p)
+
+let loc_of_beginrec (linebreaks : IntSet.t) id : LineCol.t =
+  match id with
+  | AbsBasilIR.BeginRec ((b, e), n) -> loc_of_char_pos linebreaks b
+
+let loc_of_endrec (linebreaks : IntSet.t) id : LineCol.t =
+  match id with
+  | AbsBasilIR.EndRec ((b, e), n) -> loc_of_char_pos linebreaks e
+
+let loc_of_beginlist (linebreaks : IntSet.t) id : LineCol.t =
+  match id with
+  | AbsBasilIR.BeginList ((b, e), n) -> loc_of_char_pos linebreaks b
+
+let loc_of_endlist (linebreaks : IntSet.t) id : LineCol.t =
+  match id with
+  | AbsBasilIR.EndList ((b, e), n) -> loc_of_char_pos linebreaks e
+
 let find_token_opt (tokens : 'a TokenMap.t) (pos : LineCol.t) : 'a option =
-  TokenMap.find_last_opt (fun t -> LineCol.compare (fst t) pos < 0) tokens
+  TokenMap.find_last_opt (fun t -> LineCol.compare (fst t) pos <= 0) tokens
   |> function
   | Some (t, r)
     when let pos_col = snd pos in
@@ -113,20 +142,22 @@ module Processor = struct
   open BasilIR.AbsBasilIR
 
   type symbs = {
-    proc_defs : Token.t StringMap.t;
+    proc_defs : def_info StringMap.t;
     proc_children : string list StringMap.t;
-    block_defs : Token.t StringMap.t;
+    block_defs : def_info StringMap.t;
     proc_refs : string TokenMap.t;
     block_refs : string TokenMap.t;
   }
 
   let get_syms (s : symbs) : DocumentSymbol.t list =
-    let block_sym (blockname : string) (pos : Token.t) =
+    let block_sym (blockname : string) (def : def_info) =
       Linol_lwt.DocumentSymbol.create ~kind:Lsp.Types.SymbolKind.Method
-        ~name:blockname ~range:(Token.to_range pos)
-        ~selectionRange:(Token.to_range pos) ()
+        ~name:blockname
+        ~selectionRange:(Token.to_range def.label_tok)
+        ~range:(LineCol.range def.range_start def.range_end)
+        ()
     in
-    let proc_sym (procname : string) (pos : Token.t) =
+    let proc_sym (procname : string) (def : def_info) =
       let children =
         StringMap.find procname s.proc_children
         |> List.map (fun n -> (n, StringMap.find n s.block_defs))
@@ -134,18 +165,20 @@ module Processor = struct
       in
       Linol_lwt.DocumentSymbol.create ~children
         ~kind:Lsp.Types.SymbolKind.Class ~name:procname
-        ~range:(Token.to_range pos) ~selectionRange:(Token.to_range pos) ()
+        ~selectionRange:(Token.to_range def.label_tok)
+        ~range:(LineCol.range def.range_start def.range_end)
+        ()
     in
     StringMap.to_list s.proc_defs |> List.map (fun (s, t) -> proc_sym s t)
 
   let print_syms (s : symbs) =
     log "procdefs\n";
     StringMap.iter
-      (fun a b -> log (a ^ " @ " ^ Token.pp b ^ "\n"))
+      (fun a b -> log (a ^ " @ " ^ Token.pp b.label_tok ^ "\n"))
       s.proc_defs;
     log "block defs\n";
     StringMap.iter
-      (fun a b -> log (a ^ " @ " ^ Token.pp b ^ "\n"))
+      (fun a b -> log (a ^ " @ " ^ Token.pp b.label_tok ^ "\n"))
       s.block_defs;
     log "proc refs\n";
     TokenMap.iter
@@ -156,7 +189,8 @@ module Processor = struct
       (fun a b -> log (b ^ " @ " ^ Token.pp a ^ "\n"))
       s.block_refs
 
-  let find_definition (s : symbs) (line_num : int) (col_num : int) =
+  let find_definition (s : symbs) (line_num : int) (col_num : int) :
+      def_info option =
     let r = LineCol.create line_num col_num in
     let find m i =
       Option.bind i (fun (x : string) -> StringMap.find_opt x m)
@@ -181,11 +215,11 @@ module Processor = struct
     object
       (* procid, blockid *)
       val mutable current_proc : string option = None
-      val mutable proc_defs : Token.t StringMap.t = StringMap.empty
+      val mutable proc_defs : def_info StringMap.t = StringMap.empty
       val mutable proc_children : string list StringMap.t = StringMap.empty
 
       (* containing procedure key, block identifier key *)
-      val mutable block_defs : Token.t StringMap.t = StringMap.empty
+      val mutable block_defs : def_info StringMap.t = StringMap.empty
       val mutable proc_refs : string TokenMap.t = TokenMap.empty
       val mutable block_refs : string TokenMap.t = TokenMap.empty
       inherit nopBasilVisitor
@@ -208,11 +242,7 @@ module Processor = struct
 
       method! vstmt (s : statement) =
         let r =
-          match s with
-          | DirectCall (id, _) -> Some id
-          | DirectCallReturnLocal (_, id, _) -> Some id
-          | DirectCallReturn (_, id, _) -> Some id
-          | _ -> None
+          match s with DirectCall (_, id, _) -> Some id | _ -> None
         in
         Option.iter
           (fun id ->
@@ -222,20 +252,49 @@ module Processor = struct
         SkipChildren
 
       method! vproc (p : bIdent * procDef) =
+        let b, e =
+          match p with
+          | ( bi,
+              PD
+                ( beginRec,
+                  str,
+                  pAddress,
+                  pEntry,
+                  pExit,
+                  internalBlocks,
+                  endRec ) ) ->
+              (beginRec, endRec)
+        in
         let pos, id = unpack_ident (fst p) linebreaks in
-        proc_defs <- StringMap.add id pos proc_defs;
+        let pd : def_info =
+          {
+            label = id;
+            label_tok = pos;
+            range_start = Token.begin_linecol pos;
+            range_end = loc_of_endrec linebreaks e;
+          }
+        in
+        proc_defs <- StringMap.add id pd proc_defs;
         current_proc <- Some id;
         proc_children <- StringMap.add id [] proc_children;
         DoChildren
 
       method! vblock (b : block) =
         match b with
-        | B (id, _, _, _) ->
+        | B (id, _, bg, _, _, ed) ->
             let pos, id = unpack_ident id linebreaks in
             let proc = Option.get current_proc in
             let nblocks = id :: StringMap.find proc proc_children in
+            let blockdef =
+              {
+                label = id;
+                label_tok = pos;
+                range_start = Token.begin_linecol pos;
+                range_end = loc_of_endlist linebreaks ed;
+              }
+            in
             proc_children <- StringMap.add proc nblocks proc_children;
-            block_defs <- StringMap.add id pos block_defs;
+            block_defs <- StringMap.add id blockdef block_defs;
             DoChildren
     end
 
@@ -313,7 +372,12 @@ class lsp_server =
 
     method spawn_query_handler f = Linol_lwt.spawn f
     method! config_definition = Some (`Bool true)
-    method! config_symbol = Some (`Bool true)
+
+    method! config_symbol =
+      Some
+        (`DocumentSymbolOptions
+          (DocumentSymbolOptions.create ~label:"symbols"
+             ~workDoneProgress:true ()))
 
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         (uri : Lsp.Types.DocumentUri.t) (contents : string) =
@@ -335,7 +399,6 @@ class lsp_server =
 
     method on_req_hover ~notify_back ~id ~uri ~pos ~workDoneToken
         (d : Linol_lwt.doc_state) =
-      let doc = Hashtbl.find buffers d.uri in
       Lwt.return None
 
     (* `Location of Location.t list *)
@@ -351,17 +414,29 @@ class lsp_server =
       | _ -> None)
       |> Option.map (fun def ->
              `Location
-               [ Linol_lwt.Location.create ~range:(Token.to_range def) ~uri ])
+               [
+                 Linol_lwt.Location.create
+                   ~range:(Token.to_range def.label_tok)
+                   ~uri;
+               ])
       |> Lwt.return
 
     method on_req_symbol ~notify_back ~id ~uri ~workDoneToken
-        ~partialResultToken d =
-      (match (Hashtbl.find buffers uri).ast with
-      | Ast (p, syms) -> Some syms
-      | _ -> None)
-      |> Option.map (fun s -> Processor.get_syms s)
-      |> Option.map (fun x -> `DocumentSymbol x)
-      |> Lwt.return
+        ~partialResultToken e =
+      log "req syms";
+      (*(notify_back#work_done_progress_begin (WorkDoneProgressBegin.create
+        ~title:"symbols" ())) >>= fun e ->
+        (notify_back#work_done_progress_end (WorkDoneProgressEnd.create
+        ~message:"completed" ())) >>= *)
+      let r =
+        (match (Hashtbl.find buffers uri).ast with
+        | Ast (p, syms) -> Some syms
+        | _ -> None)
+        |> Option.map (fun s -> Processor.get_syms s)
+        |> Option.map (fun x -> `DocumentSymbol x)
+      in
+      (function Some x -> log "syms" | None -> log "no syms") r;
+      Lwt.return r
 
     (* On document closes, we remove the state associated to the file from
        the global hashtable state, to avoid leaking memory. *)
@@ -373,6 +448,7 @@ class lsp_server =
 (* Main code This is the code that creates an instance of the lsp server
    class and runs it as a task. *)
 let run () =
+  log "start";
   let s = new lsp_server in
   let server = Linol_lwt.Jsonrpc2.create_stdio ~env:() s in
   let task =
@@ -386,5 +462,13 @@ let run () =
       Printf.eprintf "error: %s\n%!" e;
       exit 1
 
+let () =
+  Printexc.record_backtrace true;
+  Printexc.register_printer (function
+    | e ->
+        Some
+          (Printexc.print_backtrace oc;
+           "")
+    | _ -> None);
+  run ()
 (* Finally, we actually run the server *)
-let () = run ()

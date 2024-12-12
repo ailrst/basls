@@ -184,8 +184,8 @@ and prtStatementListBNFC i es : doc = match (i, es) with
   | (_,x::xs) -> (concatD [prtStatement 0 x ; render ";" ; prtStatementListBNFC 0 xs])
 and prtCallLVars (i:int) (e : AbsBasilIR.callLVars) : doc = match e with
        AbsBasilIR.NoOutParams  -> prPrec i 0 (concatD [])
-  |    AbsBasilIR.LocalVars lvars -> prPrec i 0 (concatD [render "var" ; render "(" ; prtLVarListBNFC 0 lvars ; render ")" ; render ":="])
   |    AbsBasilIR.ListOutParams lvars -> prPrec i 0 (concatD [render "(" ; prtLVarListBNFC 0 lvars ; render ")" ; render ":="])
+  |    AbsBasilIR.LocalVars lvars -> prPrec i 0 (concatD [render "var" ; render "(" ; prtLVarListBNFC 0 lvars ; render ")" ; render ":="])
 
 
 and prtJump (i:int) (e : AbsBasilIR.jump) : doc = match e with
@@ -244,9 +244,9 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
        AbsBasilIR.RVar (bident, type_) -> prPrec i 0 (concatD [prtBIdent 0 bident ; render ":" ; prtTypeT 0 type_])
   |    AbsBasilIR.BinaryExpr (binop, expr1, expr2) -> prPrec i 0 (concatD [prtBinOp 0 binop ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
   |    AbsBasilIR.UnaryExpr (unop, expr) -> prPrec i 0 (concatD [prtUnOp 0 unop ; render "(" ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.ZeroExtend (intval, expr) -> prPrec i 0 (concatD [render "zero_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.SignExtend (intval, expr) -> prPrec i 0 (concatD [render "sign_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Extract (intval1, intval2, expr) -> prPrec i 0 (concatD [render "extract" ; render "(" ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; render ")"])
+  |    AbsBasilIR.ZeroExtend (intval, expr) -> prPrec i 0 (concatD [render "bvzero_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
+  |    AbsBasilIR.SignExtend (intval, expr) -> prPrec i 0 (concatD [render "bvsign_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
+  |    AbsBasilIR.Extract (intval1, intval2, expr) -> prPrec i 0 (concatD [render "bvextract" ; render "(" ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Concat (expr1, expr2) -> prPrec i 0 (concatD [render "bvconcat" ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
   |    AbsBasilIR.BVLiteral (intval, bvtype) -> prPrec i 0 (concatD [prtIntVal 0 intval ; render ":" ; prtBVType 0 bvtype])
   |    AbsBasilIR.IntLiteral intval -> prPrec i 0 (concatD [prtIntVal 0 intval])

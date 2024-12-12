@@ -1,4 +1,4 @@
-all: tex/BasilIR.pdf java/basil_ir/BasilIRParser.g4 runcpp ocaml runjava notypetex/BasilIR-NoTypes.pdf
+all: tex/BasilIR.pdf ocaml
 
 java/basil_ir/Test.class: java/basil_ir/BasilIRParser.g4
 	$(MAKE) -C java
