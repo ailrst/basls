@@ -454,7 +454,11 @@ type doc_ast =
   | SyntaxError of (string * position * position)
   | Ast of AbsBasilIR.moduleT * Processor.symbs
 
-type state_after_processing = { linebreaks : linebreaks; ast : doc_ast }
+type state_after_processing = {
+  linebreaks : linebreaks;
+  ast : doc_ast;
+  procs : BasilAST.BasilAST.proc list;
+}
 
 let process (s : string) : state_after_processing =
   let lexbuf = Lexing.from_string s in
@@ -462,12 +466,29 @@ let process (s : string) : state_after_processing =
   try
     let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
     let syms = Processor.get_symbs linebreaks prog in
+    let procs =
+      try
+        let procs = BasilAST.BasilASTLoader.transProgram prog in
+        let oc = open_out "show" in
+        List.map (fun p -> BasilAST.BasilAST.show_proc p) procs
+        |> List.iter (fun s -> output_string oc s);
+        procs
+      with exn ->
+        let e = Printexc.to_string exn in
+        log (Printf.sprintf "%s:\n" e);
+        Option.iter Printexc.print_backtrace oc;
+        []
+    in
     (*Processor.print_syms syms; *)
-    { linebreaks; ast = Ast (prog, syms) }
+    { linebreaks; ast = Ast (prog, syms); procs }
   with ParBasilIR.Error ->
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
-    { linebreaks; ast = SyntaxError (lexeme lexbuf, start_pos, end_pos) }
+    {
+      linebreaks;
+      ast = SyntaxError (lexeme lexbuf, start_pos, end_pos);
+      procs = [];
+    }
 
 let process_some_input_file (_file_contents : string) :
     state_after_processing =
@@ -611,7 +632,7 @@ let run () =
   | () -> ()
   | exception e ->
       let e = Printexc.to_string e in
-      Printf.eprintf "error: %s\n%!" e;
+      Option.iter (fun oc -> Printf.fprintf oc "error: %s\n%!" e) oc;
       exit 1
 
 let () =

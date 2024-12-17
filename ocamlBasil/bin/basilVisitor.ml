@@ -19,6 +19,8 @@ class type basilVisitor = object
   method vstmt : statement -> statement visitAction
   method vjump : jump -> jump visitAction
   method vtype : typeT -> typeT visitAction
+  method vexpr : expr -> expr visitAction
+  method vlvar : lVar -> lVar visitAction
 end
 
 let singletonVisitAction (a : 'a visitAction) : 'a list visitAction =
@@ -92,10 +94,80 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
       doVisit vis (vis#vblock b) next b
 
     method visit_statement (s : statement) : statement =
-      doVisit vis (vis#vstmt s) nochildren s
+      let next _ b =
+        match b with
+        | Assign (o, expr) -> Assign (self#visit_lvar o, self#visit_expr expr)
+        | SLoad (lVar, endian, memory, addr, size) ->
+            let nlv = self#visit_lvar lVar in
+            let nadr = self#visit_expr addr in
+            if nlv <> lVar || nadr <> addr then
+              SLoad (nlv, endian, memory, nadr, size)
+            else b
+        | SStore (endian, bIdent, addr, value, size) ->
+            let nadr = self#visit_expr addr in
+            let nvalue = self#visit_expr value in
+            if nadr <> addr || nvalue <> value then
+              SStore (endian, bIdent, nadr, nvalue, size)
+            else b
+        | DirectCall (callLVars, bIdent, actual_params) ->
+            let params = mapNoCopy self#visit_expr actual_params in
+            if params <> actual_params then
+              DirectCall (callLVars, bIdent, params)
+            else b
+        | IndirectCall expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then IndirectCall ne else b
+        | Assume expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then Assume ne else b
+        | Assert expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then Assert ne else b
+      in
+      doVisit vis (vis#vstmt s) next s
 
     method visit_jump (j : jump) : jump =
-      doVisit vis (vis#vjump j) nochildren j
+      let next _ j =
+        match j with
+        | Return params ->
+            let np = mapNoCopy self#visit_expr params in
+            if np <> params then Return np else j
+        | j -> j
+      in
+      doVisit vis (vis#vjump j) next j
+
+    method visit_expr (e : expr) =
+      let next _ e =
+        match e with
+        | RVar (bIdent, typeT) -> e
+        | BinaryExpr (binOp, l, r) ->
+            let nl = self#visit_expr l in
+            let nr = self#visit_expr r in
+            if nl <> l || nr <> r then BinaryExpr (binOp, nl, nr) else e
+        | UnaryExpr (unOp, l) ->
+            let nl = self#visit_expr l in
+            if nl <> l then UnaryExpr (unOp, l) else e
+        | ZeroExtend (intVal, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then ZeroExtend (intVal, expr) else e
+        | SignExtend (intVal, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then SignExtend (intVal, expr) else e
+        | Extract (upper, lower, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then Extract (upper, lower, expr) else e
+        | Concat (l, r) ->
+            let nl = self#visit_expr l in
+            let nr = self#visit_expr r in
+            if nl <> l || nr <> r then Concat (nl, nr) else e
+        | BVLiteral (intVal, bVType) -> e
+        | IntLiteral intVal -> e
+        | TrueLiteral -> e
+        | FalseLiteral -> e
+      in
+      doVisit vis (vis#vexpr e) next e
+
+    method visit_lvar (e : lVar) = doVisit vis (vis#vlvar e) nochildren e
 
     method visit_type (x : typeT) : typeT =
       doVisit vis (vis#vtype x) nochildren x
@@ -110,6 +182,8 @@ class nopBasilVisitor : basilVisitor =
     method vstmt (_ : statement) = DoChildren
     method vjump (_ : jump) = DoChildren
     method vtype (_ : typeT) = DoChildren
+    method vexpr (_ : expr) = DoChildren
+    method vlvar (_ : lVar) = DoChildren
   end
 
 class forwardBasilvisitor (vis : #basilVisitor) =
