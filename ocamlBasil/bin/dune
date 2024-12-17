@@ -3,8 +3,11 @@
  (name main)
  (flags
   (-w -27 -w -39 -w -33))
- (modules main visitor basilVisitor)
+ (modules main visitor basilVisitor basilAST)
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq))
  (libraries BasilIR
   linol
   linol-lwt
-  lsp))
+  lsp
+  zarith
+  ))

@@ -14,11 +14,13 @@ open Visitor
 class type basilVisitor = object
   method vdecl : declaration -> declaration visitAction
   method vprog : program -> program visitAction
-  method vproc : (bIdent * procDef) -> (bIdent * procDef) visitAction
+  method vproc : bIdent * procDef -> (bIdent * procDef) visitAction
   method vblock : block -> block visitAction
   method vstmt : statement -> statement visitAction
   method vjump : jump -> jump visitAction
   method vtype : typeT -> typeT visitAction
+  method vexpr : expr -> expr visitAction
+  method vlvar : lVar -> lVar visitAction
 end
 
 let singletonVisitAction (a : 'a visitAction) : 'a list visitAction =
@@ -39,9 +41,8 @@ let singletonVisitAction (a : 'a visitAction) : 'a list visitAction =
 
 let nochildren x y = y
 
-(** a base class for treeVisitors transforming the AST.
-    the method visit_stmts is left abstract for subclasses
-    to implement. *)
+(** a base class for treeVisitors transforming the AST. the method
+    visit_stmts is left abstract for subclasses to implement. *)
 class virtual basilTreeVisitor (vis : #basilVisitor) =
   object (self)
     method visit_prog (p : program) : program =
@@ -50,18 +51,27 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
       in
       doVisit vis (vis#vprog p) next p
 
-    method visit_procdef (p : (bIdent * procDef)) : (bIdent * procDef) =
+    method visit_procdef (p : bIdent * procDef) : bIdent * procDef =
       let ndef v def =
-        let (ident, def) =  def in
+        let ident, def = def in
         match def with
-        | PD (beginning, procname, addrdecl, entryblock, internalBlocks, ending) ->
+        | PD
+            ( beginning,
+              procname,
+              addrdecl,
+              entryblock,
+              internalBlocks,
+              ending ) ->
             let entry = entryblock in
             let bodyBlocks =
               match internalBlocks with
-              | BSome (b, bl, e) -> BSome (b, (mapNoCopy self#visit_block bl), e)
+              | BSome (b, bl, e) ->
+                  BSome (b, mapNoCopy self#visit_block bl, e)
               | BNone -> BNone
             in
-            (ident , PD (beginning, procname, addrdecl, entry,  bodyBlocks, ending))
+            ( ident,
+              PD (beginning, procname, addrdecl, entry, bodyBlocks, ending)
+            )
       in
       doVisit vis (vis#vproc p) ndef p
 
@@ -72,7 +82,7 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | MemDecl _ -> p
         | VarDecl _ -> p
         | Procedure (id, inparams, outparams, def) ->
-            let (_, ndef) = self#visit_procdef (id, def) in
+            let _, ndef = self#visit_procdef (id, def) in
             Procedure (id, inparams, outparams, ndef)
       in
       doVisit vis (vis#vdecl p) next p
@@ -82,18 +92,90 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         match b with
         | B (bg, label, addr, stmts, j, ed) ->
             B
-              (bg, label,
+              ( bg,
+                label,
                 addr,
                 mapNoCopy self#visit_statement stmts,
-                self#visit_jump j , ed)
+                self#visit_jump j,
+                ed )
       in
       doVisit vis (vis#vblock b) next b
 
     method visit_statement (s : statement) : statement =
-      doVisit vis (vis#vstmt s) nochildren s
+      let next _ b =
+        match b with
+        | Assign (o, expr) -> Assign (self#visit_lvar o, self#visit_expr expr)
+        | SLoad (lVar, endian, memory, addr, size) ->
+            let nlv = self#visit_lvar lVar in
+            let nadr = self#visit_expr addr in
+            if nlv <> lVar || nadr <> addr then
+              SLoad (nlv, endian, memory, nadr, size)
+            else b
+        | SStore (endian, bIdent, addr, value, size) ->
+            let nadr = self#visit_expr addr in
+            let nvalue = self#visit_expr value in
+            if nadr <> addr || nvalue <> value then
+              SStore (endian, bIdent, nadr, nvalue, size)
+            else b
+        | DirectCall (callLVars, bIdent, actual_params) ->
+            let params = mapNoCopy self#visit_expr actual_params in
+            if params <> actual_params then
+              DirectCall (callLVars, bIdent, params)
+            else b
+        | IndirectCall expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then IndirectCall ne else b
+        | Assume expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then Assume ne else b
+        | Assert expr ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then Assert ne else b
+      in
+      doVisit vis (vis#vstmt s) next s
 
     method visit_jump (j : jump) : jump =
-      doVisit vis (vis#vjump j) nochildren j
+      let next _ j =
+        match j with
+        | Return params ->
+            let np = mapNoCopy self#visit_expr params in
+            if np <> params then Return np else j
+        | j -> j
+      in
+      doVisit vis (vis#vjump j) next j
+
+    method visit_expr (e : expr) =
+      let next _ e =
+        match e with
+        | RVar (bIdent, typeT) -> e
+        | BinaryExpr (binOp, l, r) ->
+            let nl = self#visit_expr l in
+            let nr = self#visit_expr r in
+            if nl <> l || nr <> r then BinaryExpr (binOp, nl, nr) else e
+        | UnaryExpr (unOp, l) ->
+            let nl = self#visit_expr l in
+            if nl <> l then UnaryExpr (unOp, l) else e
+        | ZeroExtend (intVal, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then ZeroExtend (intVal, expr) else e
+        | SignExtend (intVal, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then SignExtend (intVal, expr) else e
+        | Extract (upper, lower, expr) ->
+            let nl = self#visit_expr expr in
+            if nl <> expr then Extract (upper, lower, expr) else e
+        | Concat (l, r) ->
+            let nl = self#visit_expr l in
+            let nr = self#visit_expr r in
+            if nl <> l || nr <> r then Concat (nl, nr) else e
+        | BVLiteral (intVal, bVType) -> e
+        | IntLiteral intVal -> e
+        | TrueLiteral -> e
+        | FalseLiteral -> e
+      in
+      doVisit vis (vis#vexpr e) next e
+
+    method visit_lvar (e : lVar) = doVisit vis (vis#vlvar e) nochildren e
 
     method visit_type (x : typeT) : typeT =
       doVisit vis (vis#vtype x) nochildren x
@@ -108,6 +190,8 @@ class nopBasilVisitor : basilVisitor =
     method vstmt (_ : statement) = DoChildren
     method vjump (_ : jump) = DoChildren
     method vtype (_ : typeT) = DoChildren
+    method vexpr (_ : expr) = DoChildren
+    method vlvar (_ : lVar) = DoChildren
   end
 
 class forwardBasilvisitor (vis : #basilVisitor) =
