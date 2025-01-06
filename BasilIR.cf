@@ -80,11 +80,8 @@ B . Block ::= "block" BIdent AddrAttr BeginList
   EndList ;
 
 
-EntrySome . PEntry ::=  "entry" "=" Block ";" ;
+EntrySome . PEntry ::=  "entry_block" "=" Str ";" ;
 EntryNone . PEntry ::= "";
-
-ESome . PExit ::=  "exit" "=" Block ";";
-ENone . PExit ::= "";
 
 AddrSome . PAddress ::=  "address" "=" IntVal ";" ;
 AddrNone . PAddress ::= "";
@@ -96,7 +93,6 @@ PD . ProcDef ::= BeginRec
   "name" "=" Str ";"
   PAddress
   PEntry 
-  PExit 
   InternalBlocks
 EndRec ;
 
