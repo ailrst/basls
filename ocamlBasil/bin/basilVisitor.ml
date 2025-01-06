@@ -54,23 +54,14 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
       let ndef v def =
         let (ident, def) =  def in
         match def with
-        | PD (beginning, procname, addrdecl, entryblock, exitblock, internalBlocks, ending) ->
-            let entry =
-              match entryblock with
-              | EntryNone -> EntryNone
-              | EntrySome b -> EntrySome (self#visit_block b)
-            in
+        | PD (beginning, procname, addrdecl, entryblock, internalBlocks, ending) ->
+            let entry = entryblock in
             let bodyBlocks =
               match internalBlocks with
               | BSome (b, bl, e) -> BSome (b, (mapNoCopy self#visit_block bl), e)
               | BNone -> BNone
             in
-            let returnBlock =
-              match exitblock with
-              | ENone -> ENone
-              | ESome b -> ESome (self#visit_block b)
-            in
-            (ident , PD (beginning, procname, addrdecl, entry, returnBlock, bodyBlocks, ending))
+            (ident , PD (beginning, procname, addrdecl, entry,  bodyBlocks, ending))
       in
       doVisit vis (vis#vproc p) ndef p
 

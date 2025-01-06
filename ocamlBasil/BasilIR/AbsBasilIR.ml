@@ -80,12 +80,8 @@ and block =
    B of bIdent * addrAttr * beginList * statement list * jump * endList
 
 and pEntry =
-   EntrySome of block
+   EntrySome of str
  | EntryNone
-
-and pExit =
-   ESome of block
- | ENone
 
 and pAddress =
    AddrSome of intVal
@@ -96,7 +92,7 @@ and internalBlocks =
  | BNone
 
 and procDef =
-   PD of beginRec * str * pAddress * pEntry * pExit * internalBlocks * endRec
+   PD of beginRec * str * pAddress * pEntry * internalBlocks * endRec
 
 and params =
    Param of bIdent * typeT

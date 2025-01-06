@@ -210,13 +210,8 @@ and prtBlockListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtBlock 0 x])
   | (_,x::xs) -> (concatD [prtBlock 0 x ; render ";" ; prtBlockListBNFC 0 xs])
 and prtPEntry (i:int) (e : AbsBasilIR.pEntry) : doc = match e with
-       AbsBasilIR.EntrySome block -> prPrec i 0 (concatD [render "entry" ; render "=" ; prtBlock 0 block ; render ";"])
+       AbsBasilIR.EntrySome str -> prPrec i 0 (concatD [render "entry_block" ; render "=" ; prtStr 0 str ; render ";"])
   |    AbsBasilIR.EntryNone  -> prPrec i 0 (concatD [])
-
-
-and prtPExit (i:int) (e : AbsBasilIR.pExit) : doc = match e with
-       AbsBasilIR.ESome block -> prPrec i 0 (concatD [render "exit" ; render "=" ; prtBlock 0 block ; render ";"])
-  |    AbsBasilIR.ENone  -> prPrec i 0 (concatD [])
 
 
 and prtPAddress (i:int) (e : AbsBasilIR.pAddress) : doc = match e with
@@ -230,7 +225,7 @@ and prtInternalBlocks (i:int) (e : AbsBasilIR.internalBlocks) : doc = match e wi
 
 
 and prtProcDef (i:int) (e : AbsBasilIR.procDef) : doc = match e with
-       AbsBasilIR.PD (beginrec, str, paddress, pentry, pexit, internalblocks, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; render "name" ; render "=" ; prtStr 0 str ; render ";" ; prtPAddress 0 paddress ; prtPEntry 0 pentry ; prtPExit 0 pexit ; prtInternalBlocks 0 internalblocks ; prtEndRec 0 endrec])
+       AbsBasilIR.PD (beginrec, str, paddress, pentry, internalblocks, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; render "name" ; render "=" ; prtStr 0 str ; render ";" ; prtPAddress 0 paddress ; prtPEntry 0 pentry ; prtInternalBlocks 0 internalblocks ; prtEndRec 0 endrec])
 
 
 and prtParams (i:int) (e : AbsBasilIR.params) : doc = match e with

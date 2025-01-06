@@ -206,7 +206,7 @@ module Processor = struct
     let breaks =
       Seq.filter_map
         (* next char is beginning of a line *)
-          (fun (i, c) ->
+        (fun (i, c) ->
           match c with
           | '\n' ->
               count := !count + 1;
@@ -259,15 +259,8 @@ module Processor = struct
       method! vproc (p : bIdent * procDef) =
         let b, e =
           match p with
-          | ( bi,
-              PD
-                ( beginRec,
-                  str,
-                  pAddress,
-                  pEntry,
-                  pExit,
-                  internalBlocks,
-                  endRec ) ) ->
+          | bi, PD (beginRec, str, pAddress, pEntry, internalBlocks, endRec)
+            ->
               (beginRec, endRec)
         in
         let pos, id = unpack_ident (fst p) linebreaks in
@@ -381,8 +374,8 @@ class lsp_server =
     method! config_symbol =
       Some
         (`DocumentSymbolOptions
-          (DocumentSymbolOptions.create ~label:"symbols"
-             ~workDoneProgress:true ()))
+           (DocumentSymbolOptions.create ~label:"symbols"
+              ~workDoneProgress:true ()))
 
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         (uri : Lsp.Types.DocumentUri.t) (contents : string) =

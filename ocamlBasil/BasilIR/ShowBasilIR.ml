@@ -135,13 +135,8 @@ and showBlock (e : AbsBasilIR.block) : showable = match e with
 
 
 and showPEntry (e : AbsBasilIR.pEntry) : showable = match e with
-       AbsBasilIR.EntrySome block -> s2s "EntrySome" >> c2s ' ' >> c2s '(' >> showBlock block >> c2s ')'
+       AbsBasilIR.EntrySome str -> s2s "EntrySome" >> c2s ' ' >> c2s '(' >> showStr str >> c2s ')'
   |    AbsBasilIR.EntryNone  -> s2s "EntryNone"
-
-
-and showPExit (e : AbsBasilIR.pExit) : showable = match e with
-       AbsBasilIR.ESome block -> s2s "ESome" >> c2s ' ' >> c2s '(' >> showBlock block >> c2s ')'
-  |    AbsBasilIR.ENone  -> s2s "ENone"
 
 
 and showPAddress (e : AbsBasilIR.pAddress) : showable = match e with
@@ -155,7 +150,7 @@ and showInternalBlocks (e : AbsBasilIR.internalBlocks) : showable = match e with
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
-       AbsBasilIR.PD (beginrec, str, paddress, pentry, pexit, internalblocks, endrec) -> s2s "PD" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showStr str  >> s2s ", " >>  showPAddress paddress  >> s2s ", " >>  showPEntry pentry  >> s2s ", " >>  showPExit pexit  >> s2s ", " >>  showInternalBlocks internalblocks  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+       AbsBasilIR.PD (beginrec, str, paddress, pentry, internalblocks, endrec) -> s2s "PD" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showStr str  >> s2s ", " >>  showPAddress paddress  >> s2s ", " >>  showPEntry pentry  >> s2s ", " >>  showInternalBlocks internalblocks  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
 
 and showParams (e : AbsBasilIR.params) : showable = match e with

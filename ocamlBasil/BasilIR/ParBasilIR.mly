@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_let KW_memory KW_var KW_int KW_bool KW_map KW_address KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_assert KW_goto KW_unreachable KW_return KW_block KW_entry KW_exit KW_blocks KW_name KW_proc KW_boolnot KW_intneg KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_true KW_false KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvult KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_bveq KW_bvneq KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_inteq KW_intneq KW_intlt KW_intle KW_intgt KW_intge KW_booleq KW_boolneq KW_booland KW_boolor KW_boolimplies KW_boolequiv
+%token KW_let KW_memory KW_var KW_int KW_bool KW_map KW_address KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_assert KW_goto KW_unreachable KW_return KW_block KW_entry_block KW_blocks KW_name KW_proc KW_boolnot KW_intneg KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_true KW_false KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvult KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_bveq KW_bvneq KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_inteq KW_intneq KW_intlt KW_intle KW_intgt KW_intge KW_booleq KW_boolneq KW_booland KW_boolor KW_boolimplies KW_boolequiv
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -34,7 +34,7 @@ open Lexing
 %token <string>               TOK_IntegerHex
 %token <string>               TOK_BitvectorHex
 
-%start pProgram pDeclaration_list pBIdent_list pDeclaration pMExpr pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pAddrAttr pEndian pStatement_list pStatement pCallLVars pJump pLVar pLVar_list pBlock_list pBlock pPEntry pPExit pPAddress pInternalBlocks pProcDef pParams pParams_list pExpr pBinOp pUnOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp
+%start pProgram pDeclaration_list pBIdent_list pDeclaration pMExpr pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pAddrAttr pEndian pStatement_list pStatement pCallLVars pJump pLVar pLVar_list pBlock_list pBlock pPEntry pPAddress pInternalBlocks pProcDef pParams pParams_list pExpr pBinOp pUnOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp
 %type <AbsBasilIR.program> pProgram
 %type <AbsBasilIR.declaration list> pDeclaration_list
 %type <AbsBasilIR.bIdent list> pBIdent_list
@@ -58,7 +58,6 @@ open Lexing
 %type <AbsBasilIR.block list> pBlock_list
 %type <AbsBasilIR.block> pBlock
 %type <AbsBasilIR.pEntry> pPEntry
-%type <AbsBasilIR.pExit> pPExit
 %type <AbsBasilIR.pAddress> pPAddress
 %type <AbsBasilIR.internalBlocks> pInternalBlocks
 %type <AbsBasilIR.procDef> pProcDef
@@ -97,7 +96,6 @@ open Lexing
 %type <AbsBasilIR.block list> block_list
 %type <AbsBasilIR.block> block
 %type <AbsBasilIR.pEntry> pEntry
-%type <AbsBasilIR.pExit> pExit
 %type <AbsBasilIR.pAddress> pAddress
 %type <AbsBasilIR.internalBlocks> internalBlocks
 %type <AbsBasilIR.procDef> procDef
@@ -171,8 +169,6 @@ pBlock_list : block_list TOK_EOF { $1 };
 pBlock : block TOK_EOF { $1 };
 
 pPEntry : pEntry TOK_EOF { $1 };
-
-pPExit : pExit TOK_EOF { $1 };
 
 pPAddress : pAddress TOK_EOF { $1 };
 
@@ -300,12 +296,8 @@ block_list : /* empty */ { []  }
 block : KW_block bIdent addrAttr beginList statement_list jump endList { B ($2, $3, $4, $5, $6, $7) }
   ;
 
-pEntry : KW_entry SYMB3 block SYMB1 { EntrySome $3 }
+pEntry : KW_entry_block SYMB3 str SYMB1 { EntrySome $3 }
   | /* empty */ { EntryNone  }
-  ;
-
-pExit : KW_exit SYMB3 block SYMB1 { ESome $3 }
-  | /* empty */ { ENone  }
   ;
 
 pAddress : KW_address SYMB3 intVal SYMB1 { AddrSome $3 }
@@ -316,7 +308,7 @@ internalBlocks : KW_blocks SYMB3 beginList block_list endList SYMB1 { BSome ($3,
   | /* empty */ { BNone  }
   ;
 
-procDef : beginRec KW_name SYMB3 str SYMB1 pAddress pEntry pExit internalBlocks endRec { PD ($1, $4, $6, $7, $8, $9, $10) }
+procDef : beginRec KW_name SYMB3 str SYMB1 pAddress pEntry internalBlocks endRec { PD ($1, $4, $6, $7, $8, $9) }
   ;
 
 params : bIdent SYMB4 typeT { Param ($1, $3) }

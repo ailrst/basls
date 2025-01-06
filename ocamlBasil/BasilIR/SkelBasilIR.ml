@@ -131,13 +131,8 @@ and transBlock (x : block) : result = match x with
 
 
 and transPEntry (x : pEntry) : result = match x with
-    EntrySome block -> failure x
+    EntrySome str -> failure x
   | EntryNone  -> failure x
-
-
-and transPExit (x : pExit) : result = match x with
-    ESome block -> failure x
-  | ENone  -> failure x
 
 
 and transPAddress (x : pAddress) : result = match x with
@@ -151,7 +146,7 @@ and transInternalBlocks (x : internalBlocks) : result = match x with
 
 
 and transProcDef (x : procDef) : result = match x with
-    PD (beginrec, str, paddress, pentry, pexit, internalblocks, endrec) -> failure x
+    PD (beginrec, str, paddress, pentry, internalblocks, endrec) -> failure x
 
 
 and transParams (x : params) : result = match x with
