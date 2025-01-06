@@ -7,11 +7,15 @@ open Lsp.Types
 module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)
 
-let oc = open_out "logger"
+let debug = false
+let oc = if debug then Some (open_out ".basillsplog") else None
 
 let log (s : string) =
-  output_string oc (s ^ "\n");
-  flush oc
+  Option.map
+    (fun oc ->
+      output_string oc (s ^ "\n");
+      flush oc)
+    oc
 
 (* offset -> linenum *)
 type linebreaks = int IntMap.t
