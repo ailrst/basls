@@ -1,4 +1,18 @@
+open Hashcons
 
+let combine acc n = (acc * 65599) + n
+let combine2 acc n1 n2 = combine (combine acc n1) n2
+
+class fresh () =
+  object (self)
+    val mutable counter = 0
+
+    method get () =
+      counter <- counter + 1;
+      counter
+  end
+
+let fresh = new fresh ()
 
 module BasilAST = struct
   type btype = Bitvector of int | Integer | Boolean | Map of btype * btype
@@ -10,72 +24,19 @@ module BasilAST = struct
   let show_integer i = Z.to_string i
   let equal_integer i j = Z.equal i j
 
+  type bitvector = int * integer [@@deriving show, eq]
 
-  type bitvector = int * integer
-  [@@deriving show, eq]
+  let bv_size b = fst b
+  let bv_val b = snd b
 
-  and endian = LittleEndian | BigEndian
-  [@@deriving show, eq]
+  type endian = LittleEndian | BigEndian [@@deriving show, eq]
 
-  type textRange = (int * int) option
-  [@@deriving show, eq]
-  and ident = string * textRange
-  [@@deriving show, eq]
+  type textRange = (int * int) option [@@deriving show, eq]
+  and ident = string * textRange [@@deriving show, eq]
 
-  and block = {
-    label : string;
-    addr : integer option;
-    stmts : statement list;
-    jump : jump;
-    label_lexical_range : textRange;
-    stmts_lexical_range : textRange;
-  }
-  [@@deriving show, eq]
+  type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG [@@deriving show, eq]
 
-  and proc = {
-    label : string;
-    formal_in_params : lVar list;
-    formal_out_params : lVar list;
-    addr : integer option;
-    entry : string option;
-    internal_blocks : block list;
-    label_lexical_range : textRange;
-    blocklist_lexical_range : textRange;
-  }
-  [@@deriving show, eq]
-
-  and statement =
-    | Assign of lVar * expr
-    | Load of lVar * endian * ident * expr * integer
-    | Store of endian * ident * expr * expr * integer
-    | DirectCall of lVar list * ident * expr list
-    | IndirectCall of expr
-    | Assume of expr
-    | Assert of expr
-  [@@deriving show, eq]
-
-  and jump = GoTo of ident list | Unreachable | Return of expr list
-  [@@deriving show, eq]
-  and lVar = LVarDef of ident * btype | GlobalLVar of ident * btype
-  [@@deriving show, eq]
-
-  and expr =
-    | RVar of ident * btype
-    | BinaryExpr of binOp * expr * expr
-    | UnaryExpr of unOp * expr
-    | ZeroExtend of integer * expr
-    | SignExtend of integer * expr
-    | Extract of integer * integer * expr
-    | Concat of expr * expr
-    | BVConst of bitvector
-    | IntConst of integer
-    | BoolConst of bool
-  [@@deriving show, eq]
-
-  and unOp = BOOLNOT | INTNEG | BVNOT | BVNEG
-  [@@deriving show, eq]
-
-  and binOp =
+  type binOp =
     | BVAND
     | BVOR
     | BVADD
@@ -121,6 +82,149 @@ module BasilAST = struct
     | BOOLOR
     | BOOLIMPLIES
   [@@deriving show, eq]
+
+  type expr_node =
+    | RVar of ident * btype
+    | BinaryExpr of binOp * expr * expr
+    | UnaryExpr of unOp * expr
+    | ZeroExtend of integer * expr
+    | SignExtend of integer * expr
+    | Extract of integer * integer * expr
+    | Concat of expr * expr
+    | BVConst of bitvector
+    | IntConst of integer
+    | BoolConst of bool
+
+  and expr = expr_node hash_consed
+
+  let expr_view e = e.node
+
+  type lVar = LVarDef of ident * btype | GlobalLVar of ident * btype
+  [@@deriving show, eq]
+
+  module ExprHashable = struct
+    type t = expr_node
+
+    let equal (e1 : t) (e2 : t) : bool =
+      match (e1, e2) with
+      | RVar (i, t), RVar (i2, t2) -> i = i2 && t = t2
+      | BinaryExpr (bop, e1, e2), BinaryExpr (bop2, e12, e22) ->
+          bop = bop2 && e1 == e12 && e2 == e22
+      | UnaryExpr (op1, e1), UnaryExpr (op2, e2) -> op1 = op2 && e1 == e2
+      | ZeroExtend (sz, e1), ZeroExtend (sz2, e2) -> sz = sz2 && e1 == e2
+      | SignExtend (sz, e1), SignExtend (sz2, e2) -> sz = sz2 && e1 == e2
+      | Extract (hi1, lo1, e1), Extract (hi2, lo2, e2) ->
+          hi1 = hi2 && lo1 = lo2 && e1 == e2
+      | Concat (e11, e12), Concat (e21, e22) -> e11 == e21 && e12 == e22
+      | BVConst bv1, BVConst bv2 -> equal_bitvector bv1 bv2
+      | IntConst i, IntConst i2 -> equal_integer i i2
+      | BoolConst i, BoolConst i2 -> i = i2
+      | _ -> false
+
+    let hash (e1 : t) : int =
+      match e1 with
+      | BinaryExpr (bop, e1, e2) -> combine2 (Hashtbl.hash bop) e1.tag e2.tag
+      | UnaryExpr (uop, e1) -> combine e1.tag (Hashtbl.hash uop)
+      | ZeroExtend (i, e) -> combine e.tag (Hashtbl.hash i)
+      | SignExtend (i, e) -> combine e.tag (Hashtbl.hash i)
+      | Extract (hi, lo, e) ->
+          combine2 e.tag (Hashtbl.hash hi) (Hashtbl.hash lo)
+      | Concat (e1, e2) -> combine e1.tag e2.tag
+      | RVar (i, t) -> combine (Hashtbl.hash i) (Hashtbl.hash t)
+      | BVConst bv ->
+          combine (Hashtbl.hash (bv_size bv)) (Z.hash @@ bv_val bv)
+      | IntConst i -> Hashtbl.hash i
+      | BoolConst b -> Hashtbl.hash b
+  end
+
+  module H = Hashcons.Make (ExprHashable)
+
+  let ht = H.create 255
+  let cons = H.hashcons ht
+
+  let rec show_expr_node e =
+    match e with
+    | RVar (i, t) -> Printf.sprintf "%s:%s" (show_ident i) (show_btype t)
+    | BinaryExpr (op, e1, e2) ->
+        Printf.sprintf "%s(%s, %s)" (show_binOp op) (show_expr e1)
+          (show_expr e2)
+    | UnaryExpr (op, e2) ->
+        Printf.sprintf "%s(%s)" (show_unOp op) (show_expr e2)
+    | ZeroExtend (sz, e) ->
+        Printf.sprintf "zero_extend(%s, %s)" (show_integer sz) (show_expr e)
+    | SignExtend (sz, e) ->
+        Printf.sprintf "sign_extend(%s, %s)" (show_integer sz) (show_expr e)
+    | Extract (hi, lo, e) ->
+        Printf.sprintf "bvextract(%s, %s, %s)" (show_integer hi)
+          (show_integer lo) (show_expr e)
+    | Concat (e1, e2) ->
+        Printf.sprintf "bvconcat(%s, %s)" (show_expr e1) (show_expr e2)
+    | BVConst bv -> show_bitvector bv
+    | IntConst i -> show_integer i
+    | BoolConst true -> "true"
+    | BoolConst false -> "false"
+
+  and show_expr e = show_expr_node (expr_view e)
+
+  let pp_expr fmt e = Format.pp_print_string fmt (show_expr e)
+  let pp_expr_node fmt e = Format.pp_print_string fmt (show_expr_node e)
+  let equal_expr e1 e2 = ExprHashable.equal e1 e2
+  let rvar ~name ~typ = cons (RVar (name, typ))
+
+  let rvar_of_lvar l =
+    match l with
+    | LVarDef (name, typ) -> rvar ~name ~typ
+    | GlobalLVar (name, typ) -> rvar ~name ~typ
+
+  let binexp ~op l r = cons (BinaryExpr (op, l, r))
+  let unexp ~op arg = cons (UnaryExpr (op, arg))
+  let zero_extend ~n_prefix_bits arg = cons (ZeroExtend (n_prefix_bits, arg))
+  let sign_extend ~n_prefix_bits arg = cons (SignExtend (n_prefix_bits, arg))
+
+  let bvextract ~hi_incl ~lo_excl arg =
+    cons (Extract (hi_incl, lo_excl, arg))
+
+  let bvconcat arg1 arg2 = cons (Concat (arg1, arg2))
+  let bvconst bv = cons (BVConst bv)
+  let intconst i = cons (IntConst i)
+  let boolconst b = cons (BoolConst b)
+
+  type statement =
+    | Assign of lVar * expr
+    | Load of lVar * endian * ident * expr * integer
+    | Store of endian * ident * expr * expr * integer
+    | DirectCall of lVar list * ident * expr list
+    | IndirectCall of expr
+    | Assume of expr
+    | Assert of expr
+  [@@deriving show]
+
+  type jump = GoTo of ident list | Unreachable | Return of expr list
+  [@@deriving show]
+
+  type block = {
+    label : string;
+    begin_loc : int;
+    end_loc : int;
+    addr : integer option;
+    stmts : statement list;
+    jump : jump;
+    label_lexical_range : textRange;
+    stmts_lexical_range : textRange;
+  }
+  [@@deriving show]
+
+  type proc = {
+    label : string;
+    formal_in_params : lVar list;
+    formal_out_params : lVar list;
+    addr : integer option;
+    entry : string option;
+    internal_blocks : block list;
+    label_lexical_range : textRange;
+    blocklist_lexical_range : textRange;
+  }
+  [@@deriving show]
 end
 
 module BasilASTLoader = struct
@@ -146,7 +250,6 @@ module BasilASTLoader = struct
   and transBIdent (x : bIdent) : ident =
     match x with BIdent (r, id) -> (id, Some r)
 
-
   and transStr (x : str) : string = match x with Str string -> string
 
   and transProgram (x : program) : proc list =
@@ -162,8 +265,7 @@ module BasilASTLoader = struct
         ( bident,
           paramss0,
           paramss,
-          PD (beginrec, str, paddress, pentry, internalblocks, endrec)
-        ) ->
+          PD (beginrec, str, paddress, pentry, internalblocks, endrec) ) ->
         let id, tr = transBIdent bident in
         let iblocks, blockrange = transInternalBlocks internalblocks in
         [
@@ -272,17 +374,19 @@ module BasilASTLoader = struct
         let name, textrange = transBIdent bident in
         {
           label = name;
+          begin_loc = fresh#get ();
+          end_loc = fresh#get ();
           addr = transAddrAttr addrattr;
           jump = transJump jump;
           label_lexical_range = textrange;
-          stmts = (List.mapi (fun i s -> transStatement s) statements);
+          stmts = List.mapi (fun i s -> transStatement s) statements;
           stmts_lexical_range = list_begin_end_to_textrange beginlist endlist;
-        } 
+        }
+
   and transPEntry (x : pEntry) : string option =
     match x with
-    | EntrySome block -> Some (transStr block) 
+    | EntrySome block -> Some (transStr block)
     | EntryNone -> None
-
 
   and transPAddress (x : pAddress) : integer option =
     match x with
@@ -292,7 +396,7 @@ module BasilASTLoader = struct
   and transInternalBlocks (x : internalBlocks) : block list * textRange =
     match x with
     | BSome (beginlist, blocks, endlist) ->
-        (List.map transBlock blocks,
+        ( List.map transBlock blocks,
           list_begin_end_to_textrange beginlist endlist )
     | BNone -> ([], None)
 
@@ -303,26 +407,28 @@ module BasilASTLoader = struct
 
   and transExpr (x : BasilIR.AbsBasilIR.expr) : BasilAST.expr =
     match x with
-    | RVar (bident, type') -> RVar (transBIdent bident, transType type')
+    | RVar (bident, type') ->
+        rvar ~name:(transBIdent bident) ~typ:(transType type')
     | BinaryExpr (binop, expr0, expr) ->
-        BinaryExpr (transBinOp binop, transExpr expr0, transExpr expr)
-    | UnaryExpr (unop, expr) -> UnaryExpr (transUnOp unop, transExpr expr)
+        binexp ~op:(transBinOp binop) (transExpr expr0) (transExpr expr)
+    | UnaryExpr (unop, expr) -> unexp ~op:(transUnOp unop) (transExpr expr)
     | ZeroExtend (intval, expr) ->
-        ZeroExtend (transIntVal intval, transExpr expr)
+        zero_extend ~n_prefix_bits:(transIntVal intval) (transExpr expr)
     | SignExtend (intval, expr) ->
-        SignExtend (transIntVal intval, transExpr expr)
+        sign_extend ~n_prefix_bits:(transIntVal intval) (transExpr expr)
     | Extract (ival0, intval, expr) ->
-        Extract (transIntVal ival0, transIntVal intval, transExpr expr)
-    | Concat (expr0, expr) -> Concat (transExpr expr0, transExpr expr)
+        bvextract ~hi_incl:(transIntVal ival0) ~lo_excl:(transIntVal intval)
+          (transExpr expr)
+    | Concat (expr0, expr) -> bvconcat (transExpr expr0) (transExpr expr)
     | BVLiteral (intval, BVT bvtype) ->
-        BVConst
+        bvconst
           ( (match transBVTYPE bvtype with
             | Bitvector i -> i
             | _ -> failwith "unreachable"),
             transIntVal intval )
-    | IntLiteral intval -> IntConst (transIntVal intval)
-    | TrueLiteral -> BoolConst true
-    | FalseLiteral -> BoolConst false
+    | IntLiteral intval -> intconst (transIntVal intval)
+    | TrueLiteral -> boolconst true
+    | FalseLiteral -> boolconst false
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) : BasilAST.binOp =
     match x with

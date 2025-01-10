@@ -3,9 +3,10 @@
  (name main)
  (flags
   (-w -27 -w -39 -w -33))
- (modules main visitor basilVisitor basilAST)
+ (modules main visitor basilVisitor basilAST basilASTVisitor analysis)
  (preprocess (pps ppx_deriving.show ppx_deriving.eq))
  (libraries BasilIR
+            hashcons
   linol
   linol-lwt
   lsp
