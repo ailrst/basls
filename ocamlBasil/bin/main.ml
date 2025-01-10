@@ -1,10 +1,11 @@
 open Yojson
 open Lexing
-open BasilIR
+open Loader
 open BasilVisitor
 open Lwt.Infix
 open Lsp.Types
 open Analysis
+open BasilIR
 module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)
 
@@ -344,9 +345,6 @@ let process (s : string) : state_after_processing =
     let syms = Processor.get_symbs linebreaks prog in
     let procs = try (
       let procs = BasilAST.BasilASTLoader.transProgram prog in
-      let oc = open_out "show" in
-      List.map (fun p -> BasilAST.BasilAST.show_proc p) procs 
-        |> List.iter (fun s -> output_string oc s);
       procs
     )
       with 
