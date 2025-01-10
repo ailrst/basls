@@ -3,6 +3,11 @@ open Hashcons
 let combine acc n = (acc * 65599) + n
 let combine2 acc n1 n2 = combine (combine acc n1) n2
 
+let unquote s =
+  if String.starts_with ~prefix:"\"" s && String.ends_with ~suffix:"\"" s
+  then String.sub s 1 (String.length s - 2)
+  else s
+
 class fresh () =
   object (self)
     val mutable counter = 0
@@ -33,6 +38,8 @@ module BasilAST = struct
 
   type textRange = (int * int) option [@@deriving show, eq]
   and ident = string * textRange [@@deriving show, eq]
+
+  let string_of_ident i = fst i
 
   type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG [@@deriving show, eq]
 
@@ -100,7 +107,12 @@ module BasilAST = struct
   let expr_view e = e.node
 
   type lVar = LVarDef of ident * btype | GlobalLVar of ident * btype
-  [@@deriving show, eq]
+  [@@deriving eq]
+  let show_lVar = function 
+    | LVarDef (i, t) -> Printf.sprintf "%s: %s" (fst i) (show_btype t)
+    | GlobalLVar (i, t) -> Printf.sprintf "%s" (fst i)
+  let pp_lVar fmt e = Format.pp_print_string fmt (show_lVar e)
+
 
   module ExprHashable = struct
     type t = expr_node
@@ -168,7 +180,8 @@ module BasilAST = struct
 
   let pp_expr fmt e = Format.pp_print_string fmt (show_expr e)
   let pp_expr_node fmt e = Format.pp_print_string fmt (show_expr_node e)
-  let equal_expr e1 e2 = ExprHashable.equal e1 e2
+  let equal_expr (e1 : expr) (e2 : expr) = e1 == e2
+  let compare_expr (e1 : expr) (e2 : expr) = Int.compare e1.tag e2.tag
   let rvar ~name ~typ = cons (RVar (name, typ))
 
   let rvar_of_lvar l =
@@ -197,7 +210,21 @@ module BasilAST = struct
     | IndirectCall of expr
     | Assume of expr
     | Assert of expr
-  [@@deriving show]
+  [@@deriving eq]
+  
+
+  let string_of_endian = function 
+    | LittleEndian -> "le"
+    | BigEndian -> "be"
+  let show_statement = function 
+    | Assign (v, e) -> Printf.sprintf "%s := %s" (show_lVar v) (show_expr e)
+      | Load (lv, endian, mem, addr, sz) -> Printf.sprintf "load %s %s %s %s" (string_of_endian endian) (fst mem) (show_expr addr) (show_integer sz)
+      | Store (endian, mem, addr,value, sz) -> Printf.sprintf "store %s %s %s %s %s" (string_of_endian endian) (fst mem) (show_expr addr) (show_expr value) (show_integer sz)
+      | DirectCall _ ->  "call"
+      | IndirectCall _ ->  "indirect call"
+      | Assume e -> Printf.sprintf "assume %s" (show_expr e)
+      | Assert e -> Printf.sprintf "assert %s" (show_expr e)
+  let pp_statement fmt e = Format.pp_print_string fmt (show_statement e)
 
   type jump = GoTo of ident list | Unreachable | Return of expr list
   [@@deriving show]
@@ -205,10 +232,10 @@ module BasilAST = struct
   type block = {
     label : string;
     begin_loc : int;
-    end_loc : int;
-    addr : integer option;
     stmts : statement list;
+    end_loc : int;
     jump : jump;
+    addr : integer option;
     label_lexical_range : textRange;
     stmts_lexical_range : textRange;
   }
@@ -248,9 +275,11 @@ module BasilASTLoader = struct
         Bitvector sz
 
   and transBIdent (x : bIdent) : ident =
-    match x with BIdent (r, id) -> (id, Some r)
+    match x with BIdent (r, id) -> (unquote id, Some r)
 
-  and transStr (x : str) : string = match x with Str string -> string
+  and transStr (x : str) : string =
+    match x with
+    | Str string -> unquote string
 
   and transProgram (x : program) : proc list =
     match x with
@@ -376,9 +405,9 @@ module BasilASTLoader = struct
           label = name;
           begin_loc = fresh#get ();
           end_loc = fresh#get ();
-          addr = transAddrAttr addrattr;
           jump = transJump jump;
           label_lexical_range = textrange;
+          addr = transAddrAttr addrattr;
           stmts = List.mapi (fun i s -> transStatement s) statements;
           stmts_lexical_range = list_begin_end_to_textrange beginlist endlist;
         }

@@ -1,14 +1,38 @@
+
+(library 
+ (name loader)
+ (modules visitor basilVisitor basilAST basilASTVisitor analysis)
+(libraries BasilIR
+           hashcons
+           ocamlgraph
+           lsp
+           zarith
+  )
+  (flags (-w -27 -w -39 -w -33))
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ )
+
 (executable
  (public_name ocamlBasil)
  (name main)
  (flags
   (-w -27 -w -39 -w -33))
- (modules main visitor basilVisitor basilAST basilASTVisitor analysis)
- (preprocess (pps ppx_deriving.show ppx_deriving.eq))
- (libraries BasilIR
-            hashcons
+ (modules main )
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ (libraries 
   linol
   linol-lwt
   lsp
-  zarith
+  loader
+  BasilIR
   ))
+
+
+(executable
+ (public_name loadBas)
+ (name loadBas)
+ (flags
+  (-w -27 -w -39 -w -33))
+ (modules loadBas )
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ (libraries   loader   BasilIR ))

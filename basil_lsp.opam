@@ -12,6 +12,9 @@ depends: [
   "ocaml"
   "dune" {>= "3.16"}
   "menhir"
+  "zarith"
+  "ocamlgraph"
+  "hashcons"
   "linol" {= "0.10"}
   "linol-lwt" {= "0.10"}
   "lsp" {>= "1.22.0"}
