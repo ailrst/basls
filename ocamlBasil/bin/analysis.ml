@@ -7,7 +7,7 @@ module StringMap = Map.Make (String)
 let compose f g x = f (g x)
 
 module Vert = struct
-  type t = int [@@deriving show, eq, ord]
+  type t = int [@@deriving show {with_path=false}, eq, ord]
 
   let hash v = Int.hash v
 end
@@ -29,7 +29,7 @@ module Edge = struct
     | { label = s1; _ }, { label = s2; _ } -> String.compare s1 s2
 
   type t = Block of block_edge | Return of expr list | GoTo | Nop
-  [@@deriving show, eq, ord]
+    [@@deriving show {with_path=false}, eq, ord]
 
   let create_block ~(label : string) (stmts : statement list) =
     Block { label; stmts }
@@ -110,7 +110,7 @@ module Dot = Graph.Graphviz.Dot (struct
      ^ "\\l"
 
   let edge_attributes (e : E.t) =
-    [ `Taillabel (safe_label @@ Edge.show (E.label e)); `Minlen 5]
+    [ `Label (safe_label @@ Edge.show (E.label e)) ; `Fontname "Mono"]
 
   let default_edge_attributes _ = []
   let get_subgraph _ = None

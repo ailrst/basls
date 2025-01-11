@@ -3,6 +3,19 @@ open BasilIR
 
 let () = Printexc.record_backtrace true 
 
+let lexbuf_contents lb =
+  let open Lexing in
+  let pos = lb.lex_curr_pos in
+  let len = lb.lex_buffer_len - lb.lex_curr_pos in
+  (Bytes.to_string (Bytes.sub lb.lex_buffer pos len))
+;;
+
+let pp_lexbuf lb =
+  Format.print_string "#<lexbuf:<";
+  Format.print_string (lexbuf_contents lb);
+  Format.print_string ">>"
+;;
+
 let output_graph (s : BasilAST.BasilAST.proc list) =
   let gs = List.map Analysis.graph_of_proc s in
   let f = open_out "beans.dot" in
