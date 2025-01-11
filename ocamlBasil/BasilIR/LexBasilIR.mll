@@ -57,7 +57,7 @@ let rsyms = ";" | "," | "=" | ":" | ":=" | "(" | ")" | "->"
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +
-let bIdent = ('#' | '_' | _letter)('#' | '$' | '.' | '_' | (_digit | _letter)) *
+let bIdent = ('#' | '$' | '_' | '~' | _letter)('#' | '$' | '.' | '_' | '~' | (_digit | _letter)) *
 let beginList = '['
 let endList = ']'
 let beginRec = '{'

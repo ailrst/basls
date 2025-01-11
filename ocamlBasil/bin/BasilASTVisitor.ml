@@ -97,7 +97,7 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_expr (e : expr) =
       let next _ e =
         match expr_view e with
-        | RVar (bIdent, typeT) -> e
+        | RVar (bIdent, typeT, ind) -> e
         | BinaryExpr (binOp, l, r) ->
             let nl = self#visit_expr l in
             let nr = self#visit_expr r in
