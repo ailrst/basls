@@ -17,10 +17,10 @@ let pp_lexbuf lb =
 ;;
 
 let output_graph (s : BasilAST.BasilAST.proc list) =
-  let gs = List.map Analysis.graph_of_proc s in
+  let gs = List.map Cfg.graph_of_proc s in
   let f = open_out "beans.dot" in
   List.iter
-    (fun (x : Analysis.procedure_rec) -> Analysis.Dot.output_graph f x.graph)
+    (fun (x : Cfg.procedure_rec) -> Cfg.Dot.output_graph f x.graph)
     gs;
   close_out f
 
