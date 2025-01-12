@@ -22,10 +22,11 @@ let fresh = new fresh ()
 module BasilAST = struct
   type btype = Bitvector of int | Integer | Boolean | Map of btype * btype
   [@@deriving eq]
-  let rec show_btype = function 
+
+  let rec show_btype = function
     | Bitvector b -> Printf.sprintf "bv%d" b
     | Integer -> "int"
-    | Map (k, v) -> "map " ^ (show_btype v) ^ "[" ^ (show_btype k) ^ "]"
+    | Map (k, v) -> "map " ^ show_btype v ^ "[" ^ show_btype k ^ "]"
     | Boolean -> "bool"
 
   type integer = Z.t
@@ -38,19 +39,26 @@ module BasilAST = struct
 
   let bv_size b = fst b
   let bv_val b = snd b
-  let show_bitvector (b:bitvector) = Printf.sprintf "0x%s:bv%d" (Z.format "%x" @@ bv_val b) (bv_size b)
+
+  let show_bitvector (b : bitvector) =
+    Printf.sprintf "0x%s:bv%d" (Z.format "%x" @@ bv_val b) (bv_size b)
+
   let pp_bitvector fmt b = Format.pp_print_string fmt (show_bitvector b)
 
-  type endian = LittleEndian | BigEndian [@@deriving show { with_path = false }, eq]
+  type endian = LittleEndian | BigEndian
+  [@@deriving show { with_path = false }, eq]
 
-  type textRange = (int * int) option [@@deriving show { with_path = false }, eq]
-  and ident = string * textRange [@@deriving eq]
-  let show_ident (i:ident) : string = fst i
+  type textRange = (int * int) option
+  [@@deriving show { with_path = false }, eq]
+
+  and ident = string [@@deriving eq]
+
+  let show_ident (i : ident) : string = i
   let pp_ident fmt i = Format.pp_print_string fmt (show_ident i)
 
-  let string_of_ident i = fst i
+  type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG
+  [@@deriving show { with_path = false }, eq]
 
-  type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG [@@deriving show { with_path = false }, eq]
   let show_unOp x = String.lowercase_ascii (show_unOp x)
   let pp_unOp fmt x = Format.pp_print_string fmt (show_unOp x)
 
@@ -99,7 +107,8 @@ module BasilAST = struct
     | BOOLAND
     | BOOLOR
     | BOOLIMPLIES
-    [@@deriving show { with_path = false }, eq]
+  [@@deriving show { with_path = false }, eq]
+
   let show_binOp x = String.lowercase_ascii (show_binOp x)
   let pp_binOp fmt x = Format.pp_print_string fmt (show_binOp x)
 
@@ -123,8 +132,8 @@ module BasilAST = struct
   [@@deriving eq]
 
   let show_lVar = function
-    | LVarDef (i, t) -> Printf.sprintf "%s: %s" (fst i) (show_btype t)
-    | GlobalLVar (i, t) -> Printf.sprintf "%s" (fst i)
+    | LVarDef (i, t) -> Printf.sprintf "%s: %s" i (show_btype t)
+    | GlobalLVar (i, t) -> Printf.sprintf "%s" i
 
   let pp_lVar fmt e = Format.pp_print_string fmt (show_lVar e)
 
@@ -133,7 +142,8 @@ module BasilAST = struct
 
     let equal (e1 : t) (e2 : t) : bool =
       match (e1, e2) with
-      | RVar (i, t, ind), RVar (i2, t2, ind2) -> i = i2 && t = t2 && ind = ind2
+      | RVar (i, t, ind), RVar (i2, t2, ind2) ->
+          i = i2 && t = t2 && ind = ind2
       | BinaryExpr (bop, e1, e2), BinaryExpr (bop2, e12, e22) ->
           bop = bop2 && e1 == e12 && e2 == e22
       | UnaryExpr (op1, e1), UnaryExpr (op2, e2) -> op1 = op2 && e1 == e2
@@ -156,7 +166,8 @@ module BasilAST = struct
       | Extract (hi, lo, e) ->
           combine2 e.tag (Hashtbl.hash hi) (Hashtbl.hash lo)
       | Concat (e1, e2) -> combine e1.tag e2.tag
-      | RVar (i, t, ind) -> combine2 (Hashtbl.hash i) (Hashtbl.hash t) (Hashtbl.hash ind)
+      | RVar (i, t, ind) ->
+          combine2 (Hashtbl.hash i) (Hashtbl.hash t) (Hashtbl.hash ind)
       | BVConst bv ->
           combine (Hashtbl.hash (bv_size bv)) (Z.hash @@ bv_val bv)
       | IntConst i -> Hashtbl.hash i
@@ -170,7 +181,9 @@ module BasilAST = struct
 
   let rec show_expr_node e =
     match e with
-    | RVar (i, t, ind) -> if ind <> 0 then Printf.sprintf "%s_%d" (show_ident i) (ind) else show_ident i
+    | RVar (i, t, ind) ->
+        if ind <> 0 then Printf.sprintf "%s_%d" (show_ident i) ind
+        else show_ident i
     | BinaryExpr (op, e1, e2) ->
         Printf.sprintf "%s(%s, %s)" (show_binOp op) (show_expr e1)
           (show_expr e2)
@@ -196,7 +209,7 @@ module BasilAST = struct
   let pp_expr_node fmt e = Format.pp_print_string fmt (show_expr_node e)
   let equal_expr (e1 : expr) (e2 : expr) = e1 == e2
   let compare_expr (e1 : expr) (e2 : expr) = Int.compare e1.tag e2.tag
-  let rvar ?(index=0) name ~typ = cons (RVar (name, typ, index))
+  let rvar ?(index = 0) name ~typ = cons (RVar (name, typ, index))
 
   let rvar_of_lvar l =
     match l with
@@ -231,11 +244,12 @@ module BasilAST = struct
   let show_statement = function
     | Assign (v, e) -> Printf.sprintf "%s := %s" (show_lVar v) (show_expr e)
     | Load (lv, endian, mem, addr, sz) ->
-        Printf.sprintf "%s := load %s %s %s %s" (show_lVar lv) (string_of_endian endian) (fst mem)
-          (show_expr addr) (show_integer sz)
+        Printf.sprintf "%s := load %s %s %s %s" (show_lVar lv)
+          (string_of_endian endian) (mem) (show_expr addr)
+          (show_integer sz)
     | Store (endian, mem, addr, value, sz) ->
         Printf.sprintf "store %s %s %s %s %s" (string_of_endian endian)
-          (fst mem) (show_expr addr) (show_expr value) (show_integer sz)
+          (mem) (show_expr addr) (show_expr value) (show_integer sz)
     | DirectCall _ -> "call"
     | IndirectCall _ -> "indirect call"
     | Assume e -> Printf.sprintf "assume %s" (show_expr e)
@@ -292,7 +306,7 @@ module BasilASTLoader = struct
         Bitvector sz
 
   and transBIdent (x : bIdent) : ident =
-    match x with BIdent (r, id) -> (unquote id, Some r)
+    match x with BIdent (r, id) -> unquote id
 
   and transStr (x : str) : string =
     match x with Str string -> unquote string
@@ -311,7 +325,8 @@ module BasilASTLoader = struct
           paramss0,
           paramss,
           PD (beginrec, str, paddress, pentry, internalblocks, endrec) ) ->
-        let id, tr = transBIdent bident in
+        let tr = Some (match bident with BIdent (tr, _) -> tr) in
+        let id = transBIdent bident in
         let iblocks, blockrange = transInternalBlocks internalblocks in
         [
           {
@@ -416,7 +431,8 @@ module BasilASTLoader = struct
   and transBlock (x : BasilIR.AbsBasilIR.block) : block =
     match x with
     | B (bident, addrattr, beginlist, statements, jump, endlist) ->
-        let name, textrange = transBIdent bident in
+        let textrange = Some (match bident with BIdent (tr, _) -> tr) in
+        let name= transBIdent bident in
         let begin_loc = fresh#get () in
         let end_loc = fresh#get () in
         {
