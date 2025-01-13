@@ -7,8 +7,9 @@
            ocamlgraph
            lsp
            zarith
+           containers
   )
-  (flags (-w -27 -w -39 -w -33))
+  (flags (-w -27 -w -39 -w -33 -w -23))
  (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
  )
 
