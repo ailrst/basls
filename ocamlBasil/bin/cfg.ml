@@ -1,6 +1,8 @@
 open BasilAST
 open BasilASTVisitor
 open BasilAST
+open Containers
+open Containers
 module IntMap = Map.Make (Int)
 module StringMap = Map.Make (String)
 
@@ -45,33 +47,35 @@ type procedure_rec = {
   unreachable_vertex : int;
 }
 
-let block_with_begin p begin_block =
-  let end_v =
-    G.succ p.graph begin_block |> function
+let block_edge_with_begin graph begin_block =
+  let open Option in
+  let* end_v =
+    G.succ graph begin_block |> function
     | h :: [] -> Some h
     | [] -> None
     | xs -> None
   in
-  Option.map (fun end_v -> G.find_edge p.graph begin_block end_v) end_v
-  |> Option.map G.E.label
-  |> function
-  | Some (Block _ as b) -> Some b
+  let label = G.find_edge graph begin_block end_v |> G.E.label in
+  match label with Block _ as b -> Some (begin_block, end_v, b) | _ -> None
+
+let block_with_begin graph begin_block =
+  block_edge_with_begin graph begin_block |> Option.map (fun (_, _, b) -> b)
+
+let block_edge_with_end graph end_block =
+  let open Option in
+  let* begin_block =
+    G.pred graph end_block |> function
+    | h :: [] -> Some h
+    | [] -> None
+    | xs -> None
+  in
+  let edge = G.find_edge graph begin_block end_block |> G.E.label in
+  match edge with
+  | Block _ as b -> Some (begin_block, end_block, b)
   | _ -> None
 
-let block_with_end p end_block =
-  let begin_block =
-    G.pred p.graph end_block |> function
-    | h :: [] -> Some h
-    | [] -> None
-    | xs -> None
-  in
-  Option.map
-    (fun begin_block -> G.find_edge p.graph begin_block end_block)
-    begin_block
-  |> Option.map G.E.label
-  |> function
-  | Some (Block _ as b) -> Some b
-  | _ -> None
+let block_with_end graph end_block =
+  block_edge_with_end graph end_block |> Option.map (fun (_, _, b) -> b)
 
 let graph_of_proc (p : proc) =
   let blocks =

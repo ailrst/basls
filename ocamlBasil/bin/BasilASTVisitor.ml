@@ -142,6 +142,12 @@ class nopBasilVisitor : basilVisitor =
     method vlvar (_ : lVar) = DoChildren
   end
 
+
+class reverseBasilvisitor (vis : #basilVisitor) =
+  object (self)
+    inherit basilTreeVisitor vis
+  end
+
 class forwardBasilvisitor (vis : #basilVisitor) =
   object (self)
     inherit basilTreeVisitor vis

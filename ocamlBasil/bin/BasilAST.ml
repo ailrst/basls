@@ -71,7 +71,6 @@ module BasilAST = struct
     | BVUREM
     | BVSHL
     | BVLSHR
-    | BVULT
     | BVNAND
     | BVNOR
     | BVXOR
@@ -82,6 +81,7 @@ module BasilAST = struct
     | BVSREM
     | BVSMOD
     | BVASHR
+    | BVULT
     | BVULE
     | BVUGT
     | BVUGE
@@ -109,6 +109,61 @@ module BasilAST = struct
     | BOOLIMPLIES
   [@@deriving show { with_path = false }, eq]
 
+  let binop_is_int = function
+    | INTADD | INTMUL | INTSUB | INTDIV | INTMOD -> true
+    | BOOLIMPLIES | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT
+    | BVSGE | INTLT | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND
+    | BOOLOR | BVEQ | BVNEQ | BVAND | BVOR | BVADD | BVMUL | BVUDIV | BVUREM
+    | BVSHL | BVLSHR | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB
+    | BVSDIV | BVSREM | BVSMOD | BVASHR | INTEQ | INTNEQ ->
+        false
+
+  let binop_is_bv = function
+    | BVAND | BVOR | BVADD | BVMUL | BVUDIV | BVUREM | BVSHL | BVLSHR
+    | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB | BVSDIV | BVSREM
+    | BVSMOD | BVASHR ->
+        true
+    | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT | BVSGE | BVEQ
+    | BVNEQ | INTADD | INTMUL | INTSUB | INTDIV | INTMOD | INTEQ | INTNEQ
+    | INTLT | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND | BOOLOR
+    | BOOLIMPLIES ->
+        false
+
+  let binop_is_pred = function
+    | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT | BVSGE | INTLT
+    | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND | BOOLOR | BVEQ
+    | BVNEQ | INTEQ | INTNEQ | BOOLIMPLIES ->
+        true
+    | BVAND | BVOR | BVADD | BVMUL | BVUDIV | BVUREM | BVSHL | BVLSHR
+    | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB | BVSDIV | BVSREM
+    | BVSMOD | BVASHR | INTADD | INTMUL | INTSUB | INTDIV | INTMOD ->
+        false
+
+  let bool_expr =
+    [
+      INTEQ;
+      INTNEQ;
+      INTLT;
+      INTLE;
+      INTGT;
+      INTGE;
+      BOOLEQ;
+      BOOLNEQ;
+      BOOLAND;
+      BOOLOR;
+      BOOLIMPLIES;
+      BVULT;
+      BVULE;
+      BVUGT;
+      BVUGE;
+      BVSLT;
+      BVSLE;
+      BVSGT;
+      BVSGE;
+      BVEQ;
+      BVNEQ;
+    ]
+
   let show_binOp x = String.lowercase_ascii (show_binOp x)
   let pp_binOp fmt x = Format.pp_print_string fmt (show_binOp x)
 
@@ -116,8 +171,8 @@ module BasilAST = struct
     | RVar of ident * btype * int
     | BinaryExpr of binOp * expr * expr
     | UnaryExpr of unOp * expr
-    | ZeroExtend of integer * expr
-    | SignExtend of integer * expr
+    | ZeroExtend of int * expr
+    | SignExtend of int * expr
     | Extract of integer * integer * expr
     | Concat of expr * expr
     | BVConst of bitvector
@@ -127,9 +182,44 @@ module BasilAST = struct
   and expr = expr_node hash_consed
 
   let expr_view e = e.node
+  let expr_tag e = e.tag
+
+  let rec expr_type e =
+    (* This is inefficient, (but could be efficiently memoised with hash consing)
+      We store just enough information to reconstruct the type locally; only atom exprs 
+      (rvars and constants) store their type 
+    *)
+    match expr_view e with
+    | RVar (_, t, _) -> t
+    | BinaryExpr (o, l, r) when binop_is_int o -> Integer
+    | BinaryExpr (o, l, r) when binop_is_pred o -> Boolean
+    | BinaryExpr (o, l, r) when binop_is_bv o -> expr_type l
+    | BinaryExpr (BVCOMP, l, r) -> Bitvector 1
+    | BinaryExpr (o, l, r) -> failwith "should be matched by guarded clause"
+    | BVConst bv -> Bitvector (bv_size bv)
+    | IntConst _ -> Integer
+    | BoolConst _ -> Boolean
+    | UnaryExpr (BOOLNOT, _) -> Boolean
+    | UnaryExpr (INTNEG, _) -> Integer
+    | UnaryExpr (BVNEG, x) -> Bitvector (bv_width x)
+    | UnaryExpr (BVNOT, x) -> Bitvector (bv_width x)
+    | Concat (x, y) -> Bitvector (bv_width x + bv_width y)
+    | ZeroExtend (sz, e) -> Bitvector (sz + bv_width e)
+    | SignExtend (sz, e) -> Bitvector (sz + bv_width e)
+    | Extract (hi, lo, _) -> Bitvector (Z.sub hi lo |> Z.to_int)
+
+  and bv_width (e : expr) =
+    match expr_type e with
+    | Bitvector sz -> sz
+    | _ -> failwith "type error; not a bv"
+
+  (* BOOLNOT | INTNEG | BVNOT | BVNEG *)
 
   type lVar = LVarDef of ident * btype | GlobalLVar of ident * btype
   [@@deriving eq]
+
+  let ident_of_lvar = function LVarDef (v, t) -> v | GlobalLVar (v, t) -> v
+  let type_of_lvar = function LVarDef (v, t) -> t | GlobalLVar (v, t) -> t
 
   let show_lVar = function
     | LVarDef (i, t) -> Printf.sprintf "%s: %s" i (show_btype t)
@@ -190,9 +280,9 @@ module BasilAST = struct
     | UnaryExpr (op, e2) ->
         Printf.sprintf "%s(%s)" (show_unOp op) (show_expr e2)
     | ZeroExtend (sz, e) ->
-        Printf.sprintf "zero_extend(%s, %s)" (show_integer sz) (show_expr e)
+        Printf.sprintf "zero_extend(%d, %s)" (sz) (show_expr e)
     | SignExtend (sz, e) ->
-        Printf.sprintf "sign_extend(%s, %s)" (show_integer sz) (show_expr e)
+        Printf.sprintf "sign_extend(%d, %s)" (sz) (show_expr e)
     | Extract (hi, lo, e) ->
         Printf.sprintf "bvextract(%s, %s, %s)" (show_integer hi)
           (show_integer lo) (show_expr e)
@@ -245,11 +335,10 @@ module BasilAST = struct
     | Assign (v, e) -> Printf.sprintf "%s := %s" (show_lVar v) (show_expr e)
     | Load (lv, endian, mem, addr, sz) ->
         Printf.sprintf "%s := load %s %s %s %s" (show_lVar lv)
-          (string_of_endian endian) (mem) (show_expr addr)
-          (show_integer sz)
+          (string_of_endian endian) mem (show_expr addr) (show_integer sz)
     | Store (endian, mem, addr, value, sz) ->
-        Printf.sprintf "store %s %s %s %s %s" (string_of_endian endian)
-          (mem) (show_expr addr) (show_expr value) (show_integer sz)
+        Printf.sprintf "store %s %s %s %s %s" (string_of_endian endian) mem
+          (show_expr addr) (show_expr value) (show_integer sz)
     | DirectCall _ -> "call"
     | IndirectCall _ -> "indirect call"
     | Assume e -> Printf.sprintf "assume %s" (show_expr e)
@@ -432,7 +521,7 @@ module BasilASTLoader = struct
     match x with
     | B (bident, addrattr, beginlist, statements, jump, endlist) ->
         let textrange = Some (match bident with BIdent (tr, _) -> tr) in
-        let name= transBIdent bident in
+        let name = transBIdent bident in
         let begin_loc = fresh#get () in
         let end_loc = fresh#get () in
         {
@@ -476,9 +565,9 @@ module BasilASTLoader = struct
         binexp ~op:(transBinOp binop) (transExpr expr0) (transExpr expr)
     | UnaryExpr (unop, expr) -> unexp ~op:(transUnOp unop) (transExpr expr)
     | ZeroExtend (intval, expr) ->
-        zero_extend ~n_prefix_bits:(transIntVal intval) (transExpr expr)
+        zero_extend ~n_prefix_bits:(Z.to_int @@ transIntVal intval) (transExpr expr)
     | SignExtend (intval, expr) ->
-        sign_extend ~n_prefix_bits:(transIntVal intval) (transExpr expr)
+        sign_extend ~n_prefix_bits:(Z.to_int @@ transIntVal intval) (transExpr expr)
     | Extract (ival0, intval, expr) ->
         bvextract ~hi_incl:(transIntVal ival0) ~lo_excl:(transIntVal intval)
           (transExpr expr)
