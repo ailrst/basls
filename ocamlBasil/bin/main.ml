@@ -11,7 +11,7 @@ let debug = false
 let oc = if debug then Some (open_out ".basillsplog") else None
 
 let log (s : string) =
-  Option.map
+  Option.iter
     (fun oc ->
       output_string oc (s ^ "\n");
       flush oc)
@@ -355,7 +355,7 @@ let diagnostics (_state : state_after_processing) :
   | SyntaxError (l, p1, p2) ->
       [
         Lsp.Types.Diagnostic.create
-          ~message:("Syntax error: '" ^ l ^ "'")
+          ~message:(`String ("Syntax error: '" ^ l ^ "'"))
           ~range:(range_of_position _state.linebreaks p1 p2)
           ~severity:Lsp.Types.DiagnosticSeverity.Error ();
       ]
@@ -465,10 +465,11 @@ let run () =
       exit 1
 
 let () =
+  Option.iter (fun oc -> 
   Printexc.record_backtrace true;
   Printexc.register_printer (function e ->
       Some
         (Printexc.print_backtrace oc;
-         ""));
+         ""))) oc;
   run ()
 (* Finally, we actually run the server *)
