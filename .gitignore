@@ -1,2 +1,4 @@
 *.bak
 _build
+tex/**
+tex
