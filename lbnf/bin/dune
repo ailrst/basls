@@ -1,0 +1,8 @@
+
+(executable
+  (public_name main)
+  (modules main)
+  (libraries LBNF)
+ (flags
+  (-w -27 -w -39 -w -33))
+)

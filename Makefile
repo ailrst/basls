@@ -8,6 +8,10 @@ ocaml :  ocamlBasil/BasilIR/AbsBasilIR.ml
 ocamlBasil/BasilIR/AbsBasilIR.ml: BasilIR.cf
 	bnfc --ocaml-menhir -o ocamlBasil/BasilIR BasilIR.cf
 
+
+lbnf/lib/AbsLBNF.ml: LBNF.cf
+	bnfc --ocaml-menhir -o lbnf/lib LBNF.cf
+
 .PHONY=runjava
 runjava: java/basil_ir/Test.class FORCE
 	CLASSPATH="$$CLASSPATH:java"  java basil_ir.Test ../../../test-output.il

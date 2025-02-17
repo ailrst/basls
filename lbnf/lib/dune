@@ -1,0 +1,13 @@
+(ocamllex LexLBNF)
+
+(menhir 
+  (modules ParLBNF)
+  )
+
+(library
+ (name LBNF)
+ (modules AbsLBNF BNFC_Util PrintLBNF showLBNF SkelLBNF LexLBNF ParLBNF)
+ (flags
+  (-w -27 -w -39 -w -33))
+ )
+
