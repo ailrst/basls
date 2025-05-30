@@ -260,20 +260,28 @@ module Processor = struct
           r;
         SkipChildren
 
-      method! vproc (p : bIdent * procDef) =
-        let b, e =
+      method! vproc (p : procDef) =
+        let ident, b, e =
           match p with
-          | bi, PD (beginRec, str, pAddress, pEntry, internalBlocks, endRec)
-            ->
-              (beginRec, endRec)
+          | ProcedureDef
+              ( ProcedureSig (ProcIdent (bpos, ident), _, _),
+                attrl,
+                bl,
+                blocks,
+                EndList (epos, _) ) ->
+              (ident, bpos, epos)
+          | ProcedureDecl
+              ( ProcedureSig (ProcIdent (bpos, ident), _, _),
+                AttrDefListX (_, _, EndRec (epos, _)) ) ->
+              (ident, bpos, epos)
         in
-        let pos, id = unpack_ident (fst p) linebreaks in
+        let pos, id = unpack_ident (BIdent (b, ident)) linebreaks in
         let pd : def_info =
           {
             label = id;
             label_tok = pos;
             range_start = Token.begin_linecol pos;
-            range_end = loc_of_endrec linebreaks e;
+            range_end = loc_of_char_pos linebreaks (snd e);
           }
         in
         proc_defs <- StringMap.add id pd proc_defs;
@@ -465,11 +473,13 @@ let run () =
       exit 1
 
 let () =
-  Option.iter (fun oc -> 
-  Printexc.record_backtrace true;
-  Printexc.register_printer (function e ->
-      Some
-        (Printexc.print_backtrace oc;
-         ""))) oc;
+  Option.iter
+    (fun oc ->
+      Printexc.record_backtrace true;
+      Printexc.register_printer (function e ->
+          Some
+            (Printexc.print_backtrace oc;
+             "")))
+    oc;
   run ()
 (* Finally, we actually run the server *)

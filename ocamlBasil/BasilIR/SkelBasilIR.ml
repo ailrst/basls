@@ -12,8 +12,28 @@ let rec transBVTYPE (x : bVTYPE) : result = match x with
     BVTYPE string -> failure x
 
 
+and transUserIdent (x : userIdent) : result = match x with
+    UserIdent string -> failure x
+
+
 and transBIdent (x : bIdent) : result = match x with
     BIdent string -> failure x
+
+
+and transLocalIdent (x : localIdent) : result = match x with
+    LocalIdent string -> failure x
+
+
+and transGlobalIdent (x : globalIdent) : result = match x with
+    GlobalIdent string -> failure x
+
+
+and transBlockIdent (x : blockIdent) : result = match x with
+    BlockIdent string -> failure x
+
+
+and transProcIdent (x : procIdent) : result = match x with
+    ProcIdent string -> failure x
 
 
 and transBeginList (x : beginList) : result = match x with
@@ -49,15 +69,11 @@ and transProgram (x : program) : result = match x with
 
 
 and transDeclaration (x : declaration) : result = match x with
-    LetDecl (bident, mexpr) -> failure x
-  | MemDecl (bident, type') -> failure x
-  | VarDecl (bident, type') -> failure x
-  | Procedure (bident, paramss0, paramss, procdef) -> failure x
-
-
-and transMExpr (x : mExpr) : result = match x with
-    MSym bident -> failure x
-  | BlockM block -> failure x
+    AxiomDecl (attrdeflist, expr) -> failure x
+  | MemDecl (globalident, type') -> failure x
+  | VarDecl (globalident, type') -> failure x
+  | ProgDecl (attrdeflist, thrspecdecls) -> failure x
+  | Procedure procdef -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -88,10 +104,8 @@ and transIntVal (x : intVal) : result = match x with
   | DecInt integer -> failure x
 
 
-and transAddrAttr (x : addrAttr) : result = match x with
-    AddrAttrSome (beginrec, intval, endrec) -> failure x
-  | AddrAttrNone  -> failure x
-  | AddrAttrEmpty (beginrec, endrec) -> failure x
+and transBVVal (x : bVVal) : result = match x with
+    BV (intval, bvtype) -> failure x
 
 
 and transEndian (x : endian) : result = match x with
@@ -99,86 +113,88 @@ and transEndian (x : endian) : result = match x with
   | BigEndian  -> failure x
 
 
+and transAssignment (x : assignment) : result = match x with
+    Assignment1 (lvar, expr) -> failure x
+
+
 and transStatement (x : statement) : result = match x with
-    Assign (lvar, expr) -> failure x
-  | SLoad (lvar, endian, bident, expr, intval) -> failure x
-  | SStore (endian, bident, expr0, expr, intval) -> failure x
-  | DirectCall (calllvars, bident, exprs) -> failure x
+    Assign assignment -> failure x
+  | SimulAssign assignments -> failure x
+  | SLoad (lvar, endian, globalident, expr, intval) -> failure x
+  | SStore (endian, globalident, expr0, expr, intval) -> failure x
+  | DirectCall (calllvars, procident, exprs) -> failure x
   | IndirectCall expr -> failure x
   | Assume expr -> failure x
   | Assert expr -> failure x
 
 
+and transLocalVar (x : localVar) : result = match x with
+    LocalVar1 (localident, type') -> failure x
+
+
+and transGlobalVar (x : globalVar) : result = match x with
+    GlobalVar1 (globalident, type') -> failure x
+
+
 and transCallLVars (x : callLVars) : result = match x with
     NoOutParams  -> failure x
-  | LocalVars lvars -> failure x
+  | LocalVars localvars -> failure x
   | ListOutParams lvars -> failure x
 
 
 and transJump (x : jump) : result = match x with
-    GoTo bidents -> failure x
+    GoTo blockidents -> failure x
   | Unreachable  -> failure x
   | Return exprs -> failure x
 
 
 and transLVar (x : lVar) : result = match x with
-    LVarDef (bident, type') -> failure x
-  | GlobalLVar (bident, type') -> failure x
+    LVarDef localvar -> failure x
+  | GlobalLVar globalvar -> failure x
 
 
 and transBlock (x : block) : result = match x with
-    B (bident, addrattr, beginlist, statements, jump, endlist) -> failure x
+    Block1 (blockident, attrdeflist, beginlist, statements, jump, endlist) -> failure x
 
 
-and transPEntry (x : pEntry) : result = match x with
-    EntrySome str -> failure x
-  | EntryNone  -> failure x
+and transAttributeItem (x : attributeItem) : result = match x with
+    IntAttr (bident, intval) -> failure x
+  | BVAttr (bident, bvval) -> failure x
+  | ExprAttr (bident, expr) -> failure x
+  | StringAttr (bident, str) -> failure x
 
 
-and transPAddress (x : pAddress) : result = match x with
-    AddrSome intval -> failure x
-  | AddrNone  -> failure x
-
-
-and transInternalBlocks (x : internalBlocks) : result = match x with
-    BSome (beginlist, blocks, endlist) -> failure x
-  | BNone  -> failure x
-
-
-and transProcDef (x : procDef) : result = match x with
-    PD (beginrec, str, paddress, pentry, internalblocks, endrec) -> failure x
+and transAttrDefList (x : attrDefList) : result = match x with
+    AttrDefListSome (beginrec, attributeitems, endrec) -> failure x
+  | AttrDefListEmpty  -> failure x
 
 
 and transParams (x : params) : result = match x with
-    Param (bident, type') -> failure x
+    Param (localident, type') -> failure x
+
+
+and transProcSig (x : procSig) : result = match x with
+    ProcedureSig (procident, paramss0, paramss) -> failure x
+
+
+and transProcDef (x : procDef) : result = match x with
+    ProcedureDecl (procsig, attrdeflist) -> failure x
+  | ProcedureDef (procsig, attrdeflist, beginlist, blocks, endlist) -> failure x
 
 
 and transExpr (x : expr) : result = match x with
-    RVar (bident, type') -> failure x
-  | BinaryExpr (binop, expr0, expr) -> failure x
-  | UnaryExpr (unop, expr) -> failure x
-  | ZeroExtend (intval, expr) -> failure x
-  | SignExtend (intval, expr) -> failure x
-  | Extract (intval0, intval, expr) -> failure x
-  | Concat (expr0, expr) -> failure x
-  | BVLiteral (intval, bvtype) -> failure x
+    BVLiteral bvval -> failure x
   | IntLiteral intval -> failure x
   | TrueLiteral  -> failure x
   | FalseLiteral  -> failure x
+  | LRVar localvar -> failure x
+  | GRVar globalvar -> failure x
+  | FunctionOp (globalident, exprs) -> failure x
 
 
-and transBinOp (x : binOp) : result = match x with
-    BinOpBVBinOp bvbinop -> failure x
-  | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
-  | BinOpBoolBinOp boolbinop -> failure x
-  | BinOpIntLogicalBinOp intlogicalbinop -> failure x
-  | BinOpIntBinOp intbinop -> failure x
-
-
-and transUnOp (x : unOp) : result = match x with
-    UnOpBVUnOp bvunop -> failure x
-  | UnOp_boolnot  -> failure x
-  | UnOp_intneg  -> failure x
+and transEqOp (x : eqOp) : result = match x with
+    EqOp_eq  -> failure x
+  | EqOp_neq  -> failure x
 
 
 and transBVUnOp (x : bVUnOp) : result = match x with
@@ -195,7 +211,6 @@ and transBVBinOp (x : bVBinOp) : result = match x with
   | BVBinOp_bvurem  -> failure x
   | BVBinOp_bvshl  -> failure x
   | BVBinOp_bvlshr  -> failure x
-  | BVBinOp_bvult  -> failure x
   | BVBinOp_bvnand  -> failure x
   | BVBinOp_bvnor  -> failure x
   | BVBinOp_bvxor  -> failure x
@@ -212,12 +227,11 @@ and transBVLogicalBinOp (x : bVLogicalBinOp) : result = match x with
     BVLogicalBinOp_bvule  -> failure x
   | BVLogicalBinOp_bvugt  -> failure x
   | BVLogicalBinOp_bvuge  -> failure x
+  | BVLogicalBinOp_bvult  -> failure x
   | BVLogicalBinOp_bvslt  -> failure x
   | BVLogicalBinOp_bvsle  -> failure x
   | BVLogicalBinOp_bvsgt  -> failure x
   | BVLogicalBinOp_bvsge  -> failure x
-  | BVLogicalBinOp_bveq  -> failure x
-  | BVLogicalBinOp_bvneq  -> failure x
 
 
 and transIntBinOp (x : intBinOp) : result = match x with
@@ -229,21 +243,27 @@ and transIntBinOp (x : intBinOp) : result = match x with
 
 
 and transIntLogicalBinOp (x : intLogicalBinOp) : result = match x with
-    IntLogicalBinOp_inteq  -> failure x
-  | IntLogicalBinOp_intneq  -> failure x
-  | IntLogicalBinOp_intlt  -> failure x
+    IntLogicalBinOp_intlt  -> failure x
   | IntLogicalBinOp_intle  -> failure x
   | IntLogicalBinOp_intgt  -> failure x
   | IntLogicalBinOp_intge  -> failure x
 
 
 and transBoolBinOp (x : boolBinOp) : result = match x with
-    BoolBinOp_booleq  -> failure x
-  | BoolBinOp_boolneq  -> failure x
-  | BoolBinOp_booland  -> failure x
+    BoolBinOp_booland  -> failure x
   | BoolBinOp_boolor  -> failure x
   | BoolBinOp_boolimplies  -> failure x
-  | BoolBinOp_boolequiv  -> failure x
+
+
+and transFunSpecDecl (x : funSpecDecl) : result = match x with
+    Require expr -> failure x
+  | Ensure expr -> failure x
+  | LoopInvariant (blockident, expr) -> failure x
+
+
+and transThrSpecDecl (x : thrSpecDecl) : result = match x with
+    Rely expr -> failure x
+  | Guarantee expr -> failure x
 
 
 

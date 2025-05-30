@@ -14,7 +14,7 @@ open Visitor
 class type basilVisitor = object
   method vdecl : declaration -> declaration visitAction
   method vprog : program -> program visitAction
-  method vproc : (bIdent * procDef) -> (bIdent * procDef) visitAction
+  method vproc : procDef -> (procDef) visitAction
   method vblock : block -> block visitAction
   method vstmt : statement -> statement visitAction
   method vjump : jump -> jump visitAction
@@ -39,9 +39,8 @@ let singletonVisitAction (a : 'a visitAction) : 'a list visitAction =
 
 let nochildren x y = y
 
-(** a base class for treeVisitors transforming the AST.
-    the method visit_stmts is left abstract for subclasses
-    to implement. *)
+(** a base class for treeVisitors transforming the AST. the method
+    visit_stmts is left abstract for subclasses to implement. *)
 class virtual basilTreeVisitor (vis : #basilVisitor) =
   object (self)
     method visit_prog (p : program) : program =
@@ -50,18 +49,15 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
       in
       doVisit vis (vis#vprog p) next p
 
-    method visit_procdef (p : (bIdent * procDef)) : (bIdent * procDef) =
+    method visit_procdef (p : procDef) : procDef =
       let ndef v def =
-        let (ident, def) =  def in
         match def with
-        | PD (beginning, procname, addrdecl, entryblock, internalBlocks, ending) ->
-            let entry = entryblock in
-            let bodyBlocks =
-              match internalBlocks with
-              | BSome (b, bl, e) -> BSome (b, (mapNoCopy self#visit_block bl), e)
-              | BNone -> BNone
-            in
-            (ident , PD (beginning, procname, addrdecl, entry,  bodyBlocks, ending))
+        | ProcedureDecl (ProcedureSig (procID, inparam, outparam), attrlist)
+          as decl ->
+            decl
+        | ProcedureDef (procsig, attrlist, b, blocks, e) ->
+            let blocks = mapNoCopy self#visit_block blocks in
+            ProcedureDef (procsig, attrlist, b, blocks, e)
       in
       doVisit vis (vis#vproc p) ndef p
 
@@ -71,9 +67,9 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | LetDecl _ -> p
         | MemDecl _ -> p
         | VarDecl _ -> p
-        | Procedure (id, inparams, outparams, def) ->
-            let (_, ndef) = self#visit_procdef (id, def) in
-            Procedure (id, inparams, outparams, ndef)
+        | Procedure p ->
+            let ndef = self#visit_procdef p in
+            Procedure ndef
       in
       doVisit vis (vis#vdecl p) next p
 
@@ -82,10 +78,12 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         match b with
         | B (bg, label, addr, stmts, j, ed) ->
             B
-              (bg, label,
+              ( bg,
+                label,
                 addr,
                 mapNoCopy self#visit_statement stmts,
-                self#visit_jump j , ed)
+                self#visit_jump j,
+                ed )
       in
       doVisit vis (vis#vblock b) next b
 
@@ -103,7 +101,7 @@ class nopBasilVisitor : basilVisitor =
   object
     method vdecl (_ : declaration) = DoChildren
     method vprog (_ : program) = DoChildren
-    method vproc (_ : bIdent * procDef) = DoChildren
+    method vproc (_ : procDef) = DoChildren
     method vblock (_ : block) = DoChildren
     method vstmt (_ : statement) = DoChildren
     method vjump (_ : jump) = DoChildren
