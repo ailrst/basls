@@ -10,6 +10,13 @@ module IntSet = Set.Make (Int)
 let debug = false
 let oc = if debug then Some (open_out ".basillsplog") else None
 
+let bident_of_blockident = function 
+    | AbsBasilIR.BlockIdent x -> AbsBasilIR.BIdent x
+
+let bident_of_procident = function 
+    | AbsBasilIR.ProcIdent x -> AbsBasilIR.BIdent x
+
+
 let log (s : string) =
   Option.iter
     (fun oc ->
@@ -202,6 +209,9 @@ module Processor = struct
     | None -> find_token_opt s.proc_refs r |> find s.proc_defs
     | x -> x
 
+  let unpack_blockident id linebreaks =
+    match id with BlockIdent (_, n) -> (token_of_bident linebreaks (bident_of_blockident id), n)
+
   let unpack_ident id linebreaks =
     match id with BIdent (_, n) -> (token_of_bident linebreaks id, n)
 
@@ -243,7 +253,7 @@ module Processor = struct
         | GoTo idents ->
             List.iter
               (fun id ->
-                let pos, id = unpack_ident id linebreaks in
+                let pos, id = unpack_blockident id linebreaks in
                 block_refs <- TokenMap.add pos id block_refs)
               idents
         | _ -> ());
@@ -255,7 +265,7 @@ module Processor = struct
         in
         Option.iter
           (fun id ->
-            let pos, ident = unpack_ident id linebreaks in
+            let pos, ident = unpack_ident (bident_of_procident id) linebreaks in
             proc_refs <- TokenMap.add pos ident proc_refs)
           r;
         SkipChildren
@@ -266,14 +276,17 @@ module Processor = struct
           | ProcedureDef
               ( ProcedureSig (ProcIdent (bpos, ident), _, _),
                 attrl,
+                specl,
                 bl,
                 blocks,
                 EndList (epos, _) ) ->
               (ident, bpos, epos)
           | ProcedureDecl
               ( ProcedureSig (ProcIdent (bpos, ident), _, _),
-                AttrDefListX (_, _, EndRec (epos, _)) ) ->
+                AttrDefListSome (_, _, _, EndRec (epos, _)), specl ) ->
               (ident, bpos, epos)
+          | ProcedureDecl
+              (ProcedureSig (ProcIdent (bpos, ident), _, _), AttrDefListEmpty, _) -> (ident, bpos, bpos)
         in
         let pos, id = unpack_ident (BIdent (b, ident)) linebreaks in
         let pd : def_info =
@@ -291,8 +304,8 @@ module Processor = struct
 
       method! vblock (b : block) =
         match b with
-        | B (id, _, bg, _, _, ed) ->
-            let pos, id = unpack_ident id linebreaks in
+        | Block1 (id, _, bg, _, _, ed) ->
+            let pos, id = unpack_ident (bident_of_blockident id) linebreaks in
             let proc = Option.get current_proc in
             let nblocks = id :: StringMap.find proc proc_children in
             let blockdef =

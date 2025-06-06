@@ -39,7 +39,6 @@ let showInt (i:int) : showable = s2s (string_of_int i)
 let showFloat (f:float) : showable = s2s (string_of_float f)
 
 let rec showBVTYPE (AbsBasilIR.BVTYPE i) : showable = s2s "BVTYPE " >> showString i
-let rec showUserIdent (AbsBasilIR.UserIdent (_,i)) : showable = s2s "UserIdent " >> showString i
 let rec showBIdent (AbsBasilIR.BIdent (_,i)) : showable = s2s "BIdent " >> showString i
 let rec showLocalIdent (AbsBasilIR.LocalIdent (_,i)) : showable = s2s "LocalIdent " >> showString i
 let rec showGlobalIdent (AbsBasilIR.GlobalIdent (_,i)) : showable = s2s "GlobalIdent " >> showString i
@@ -57,11 +56,17 @@ let rec showProgram (e : AbsBasilIR.program) : showable = match e with
        AbsBasilIR.Prog declarations -> s2s "Prog" >> c2s ' ' >> c2s '(' >> showList showDeclaration declarations >> c2s ')'
 
 
+and showGobbleScolon (e : AbsBasilIR.gobbleScolon) : showable = match e with
+       AbsBasilIR.EmptyScolon  -> s2s "EmptyScolon"
+  |    AbsBasilIR.SomeScolon gobblescolon -> s2s "SomeScolon" >> c2s ' ' >> c2s '(' >> showGobbleScolon gobblescolon >> c2s ')'
+
+
 and showDeclaration (e : AbsBasilIR.declaration) : showable = match e with
        AbsBasilIR.AxiomDecl (attrdeflist, expr) -> s2s "AxiomDecl" >> c2s ' ' >> c2s '(' >> showAttrDefList attrdeflist  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.MemDecl (globalident, type') -> s2s "MemDecl" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
   |    AbsBasilIR.VarDecl (globalident, type') -> s2s "VarDecl" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.ProgDecl (attrdeflist, thrspecdecls) -> s2s "ProgDecl" >> c2s ' ' >> c2s '(' >> showAttrDefList attrdeflist  >> s2s ", " >>  showList showThrSpecDecl thrspecdecls >> c2s ')'
+  |    AbsBasilIR.ProgDeclSpec (attrdeflist, beginlist, progspecdecls, endlist) -> s2s "ProgDeclSpec" >> c2s ' ' >> c2s '(' >> showAttrDefList attrdeflist  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showProgSpecDecl progspecdecls  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.ProgDecl attrdeflist -> s2s "ProgDecl" >> c2s ' ' >> c2s '(' >> showAttrDefList attrdeflist >> c2s ')'
   |    AbsBasilIR.Procedure procdef -> s2s "Procedure" >> c2s ' ' >> c2s '(' >> showProcDef procdef >> c2s ')'
 
 
@@ -113,8 +118,9 @@ and showStatement (e : AbsBasilIR.statement) : showable = match e with
   |    AbsBasilIR.SStore (endian, globalident, expr0, expr, intval) -> s2s "SStore" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.DirectCall (calllvars, procident, exprs) -> s2s "DirectCall" >> c2s ' ' >> c2s '(' >> showCallLVars calllvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.IndirectCall expr -> s2s "IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.Assume expr -> s2s "Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.Assert expr -> s2s "Assert" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+  |    AbsBasilIR.Assume (expr, attrdeflist) -> s2s "Assume" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttrDefList attrdeflist >> c2s ')'
+  |    AbsBasilIR.Guard (expr, attrdeflist) -> s2s "Guard" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttrDefList attrdeflist >> c2s ')'
+  |    AbsBasilIR.Assert (expr, attrdeflist) -> s2s "Assert" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttrDefList attrdeflist >> c2s ')'
 
 
 and showLocalVar (e : AbsBasilIR.localVar) : showable = match e with
@@ -154,7 +160,7 @@ and showAttributeItem (e : AbsBasilIR.attributeItem) : showable = match e with
 
 
 and showAttrDefList (e : AbsBasilIR.attrDefList) : showable = match e with
-       AbsBasilIR.AttrDefListSome (beginrec, attributeitems, endrec) -> s2s "AttrDefListSome" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttributeItem attributeitems  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+       AbsBasilIR.AttrDefListSome (beginrec, attributeitems, gobblescolon, endrec) -> s2s "AttrDefListSome" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttributeItem attributeitems  >> s2s ", " >>  showGobbleScolon gobblescolon  >> s2s ", " >>  showEndRec endrec >> c2s ')'
   |    AbsBasilIR.AttrDefListEmpty  -> s2s "AttrDefListEmpty"
 
 
@@ -167,8 +173,8 @@ and showProcSig (e : AbsBasilIR.procSig) : showable = match e with
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
-       AbsBasilIR.ProcedureDecl (procsig, attrdeflist) -> s2s "ProcedureDecl" >> c2s ' ' >> c2s '(' >> showProcSig procsig  >> s2s ", " >>  showAttrDefList attrdeflist >> c2s ')'
-  |    AbsBasilIR.ProcedureDef (procsig, attrdeflist, beginlist, blocks, endlist) -> s2s "ProcedureDef" >> c2s ' ' >> c2s '(' >> showProcSig procsig  >> s2s ", " >>  showAttrDefList attrdeflist  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showBlock blocks  >> s2s ", " >>  showEndList endlist >> c2s ')'
+       AbsBasilIR.ProcedureDecl (procsig, attrdeflist, funspecdecls) -> s2s "ProcedureDecl" >> c2s ' ' >> c2s '(' >> showProcSig procsig  >> s2s ", " >>  showAttrDefList attrdeflist  >> s2s ", " >>  showList showFunSpecDecl funspecdecls >> c2s ')'
+  |    AbsBasilIR.ProcedureDef (procsig, attrdeflist, funspecdecls, beginlist, blocks, endlist) -> s2s "ProcedureDef" >> c2s ' ' >> c2s '(' >> showProcSig procsig  >> s2s ", " >>  showAttrDefList attrdeflist  >> s2s ", " >>  showList showFunSpecDecl funspecdecls  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showBlock blocks  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showExpr (e : AbsBasilIR.expr) : showable = match e with
@@ -179,6 +185,28 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.LRVar localvar -> s2s "LRVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.GRVar globalvar -> s2s "GRVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
   |    AbsBasilIR.FunctionOp (globalident, exprs) -> s2s "FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
+  |    AbsBasilIR.BinaryExpr (binop, expr0, expr) -> s2s "BinaryExpr" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.UnaryExpr (unop, expr) -> s2s "UnaryExpr" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.ZeroExtend (intval, expr) -> s2s "ZeroExtend" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.SignExtend (intval, expr) -> s2s "SignExtend" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Extract (intval0, intval, expr) -> s2s "Extract" >> c2s ' ' >> c2s '(' >> showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Concat (expr0, expr) -> s2s "Concat" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+
+
+and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
+       AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
+  |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> s2s "BinOpBVLogicalBinOp" >> c2s ' ' >> c2s '(' >> showBVLogicalBinOp bvlogicalbinop >> c2s ')'
+  |    AbsBasilIR.BinOpBoolBinOp boolbinop -> s2s "BinOpBoolBinOp" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop >> c2s ')'
+  |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> s2s "BinOpIntLogicalBinOp" >> c2s ' ' >> c2s '(' >> showIntLogicalBinOp intlogicalbinop >> c2s ')'
+  |    AbsBasilIR.BinOpIntBinOp intbinop -> s2s "BinOpIntBinOp" >> c2s ' ' >> c2s '(' >> showIntBinOp intbinop >> c2s ')'
+  |    AbsBasilIR.BinOpEqOp eqop -> s2s "BinOpEqOp" >> c2s ' ' >> c2s '(' >> showEqOp eqop >> c2s ')'
+
+
+and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
+       AbsBasilIR.UnOpBVUnOp bvunop -> s2s "UnOpBVUnOp" >> c2s ' ' >> c2s '(' >> showBVUnOp bvunop >> c2s ')'
+  |    AbsBasilIR.UnOp_boolnot  -> s2s "UnOp_boolnot"
+  |    AbsBasilIR.UnOp_intneg  -> s2s "UnOp_intneg"
+  |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with
@@ -244,13 +272,23 @@ and showBoolBinOp (e : AbsBasilIR.boolBinOp) : showable = match e with
   |    AbsBasilIR.BoolBinOp_boolimplies  -> s2s "BoolBinOp_boolimplies"
 
 
+and showREQUIRE (e : AbsBasilIR.rEQUIRE) : showable = match e with
+       AbsBasilIR.REQUIRE_require  -> s2s "REQUIRE_require"
+  |    AbsBasilIR.REQUIRE_requires  -> s2s "REQUIRE_requires"
+
+
+and showENSURE (e : AbsBasilIR.eNSURE) : showable = match e with
+       AbsBasilIR.ENSURE_ensure  -> s2s "ENSURE_ensure"
+  |    AbsBasilIR.ENSURE_ensures  -> s2s "ENSURE_ensures"
+
+
 and showFunSpecDecl (e : AbsBasilIR.funSpecDecl) : showable = match e with
-       AbsBasilIR.Require expr -> s2s "Require" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.Ensure expr -> s2s "Ensure" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+       AbsBasilIR.Require (require, expr) -> s2s "Require" >> c2s ' ' >> c2s '(' >> showREQUIRE require  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Ensure (ensure, expr) -> s2s "Ensure" >> c2s ' ' >> c2s '(' >> showENSURE ensure  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.LoopInvariant (blockident, expr) -> s2s "LoopInvariant" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
-and showThrSpecDecl (e : AbsBasilIR.thrSpecDecl) : showable = match e with
+and showProgSpecDecl (e : AbsBasilIR.progSpecDecl) : showable = match e with
        AbsBasilIR.Rely expr -> s2s "Rely" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Guarantee expr -> s2s "Guarantee" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
 

@@ -52,19 +52,21 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_procdef (p : procDef) : procDef =
       let ndef v def =
         match def with
-        | ProcedureDecl (ProcedureSig (procID, inparam, outparam), attrlist)
+        | ProcedureDecl (ProcedureSig (procID, inparam, outparam), attrlist, spec)
           as decl ->
             decl
-        | ProcedureDef (procsig, attrlist, b, blocks, e) ->
+        | ProcedureDef (procsig, attrlist, specList, b, blocks, e) ->
             let blocks = mapNoCopy self#visit_block blocks in
-            ProcedureDef (procsig, attrlist, b, blocks, e)
+            ProcedureDef (procsig, attrlist, specList, b, blocks, e)
       in
       doVisit vis (vis#vproc p) ndef p
 
     method visit_decl (p : declaration) : declaration =
       let next _ p =
         match p with
-        | LetDecl _ -> p
+        | AxiomDecl _ -> p
+        | ProgDecl _ -> p
+        | ProgDeclSpec _ -> p
         | MemDecl _ -> p
         | VarDecl _ -> p
         | Procedure p ->
@@ -76,8 +78,8 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_block (b : block) : block =
       let next _ b =
         match b with
-        | B (bg, label, addr, stmts, j, ed) ->
-            B
+        | Block1 (bg, label, addr, stmts, j, ed) ->
+            Block1
               ( bg,
                 label,
                 addr,
