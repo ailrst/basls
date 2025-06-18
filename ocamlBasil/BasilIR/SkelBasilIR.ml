@@ -48,6 +48,10 @@ and transEndRec (x : endRec) : result = match x with
     EndRec string -> failure x
 
 
+and transLambdaSep (x : lambdaSep) : result = match x with
+    LambdaSep string -> failure x
+
+
 and transStr (x : str) : result = match x with
     Str string -> failure x
 
@@ -56,12 +60,12 @@ and transIntegerHex (x : integerHex) : result = match x with
     IntegerHex string -> failure x
 
 
-and transBitvectorHex (x : bitvectorHex) : result = match x with
-    BitvectorHex string -> failure x
+and transIntegerDec (x : integerDec) : result = match x with
+    IntegerDec string -> failure x
 
 
-and transProgram (x : program) : result = match x with
-    Prog declarations -> failure x
+and transModule (x : moduleT) : result = match x with
+    Module1 declarations -> failure x
 
 
 and transGobbleScolon (x : gobbleScolon) : result = match x with
@@ -71,11 +75,19 @@ and transGobbleScolon (x : gobbleScolon) : result = match x with
 
 and transDeclaration (x : declaration) : result = match x with
     AxiomDecl (attrdeflist, expr) -> failure x
-  | MemDecl (globalident, type') -> failure x
+  | SharedMemDecl (globalident, type') -> failure x
+  | UnsharedMemDecl (globalident, type') -> failure x
   | VarDecl (globalident, type') -> failure x
-  | ProgDeclSpec (attrdeflist, beginlist, progspecdecls, endlist) -> failure x
-  | ProgDecl attrdeflist -> failure x
-  | Procedure procdef -> failure x
+  | UninterpFunDecl (attrdeflist, globalident, types, type') -> failure x
+  | FunDef (attrdeflist, globalident, paramss, type', expr) -> failure x
+  | ProgDeclWithSpec (procident, attrdeflist, beginlist, progspecs, endlist) -> failure x
+  | ProgDecl (procident, attrdeflist) -> failure x
+  | Procedure (procsig, attrdeflist, procdef) -> failure x
+
+
+and transProcDef (x : procDef) : result = match x with
+    ProcedureDecl funspecdecls -> failure x
+  | ProcedureDef (funspecdecls, beginlist, blocks, endlist) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -87,7 +99,7 @@ and transBoolType (x : boolType) : result = match x with
 
 
 and transMapType (x : mapType) : result = match x with
-    MapT (type'0, beginlist, type', endlist) -> failure x
+    MapT (type'0, type') -> failure x
 
 
 and transBVType (x : bVType) : result = match x with
@@ -103,7 +115,7 @@ and transType (x : typeT) : result = match x with
 
 and transIntVal (x : intVal) : result = match x with
     HexInt integerhex -> failure x
-  | DecInt integer -> failure x
+  | DecInt integerdec -> failure x
 
 
 and transBVVal (x : bVVal) : result = match x with
@@ -160,16 +172,20 @@ and transBlock (x : block) : result = match x with
     Block1 (blockident, attrdeflist, beginlist, statements, jump, endlist) -> failure x
 
 
-and transAttributeItem (x : attributeItem) : result = match x with
-    IntAttr (bident, intval) -> failure x
-  | BVAttr (bident, bvval) -> failure x
-  | ExprAttr (bident, expr) -> failure x
-  | StringAttr (bident, str) -> failure x
+and transAttrKeyValue (x : attrKeyValue) : result = match x with
+    AttrKeyValue1 (bident, attrvalue) -> failure x
 
 
 and transAttrDefList (x : attrDefList) : result = match x with
-    AttrDefListSome (beginrec, attributeitems, gobblescolon, endrec) -> failure x
+    AttrDefListSome (beginrec, attrkeyvalues, gobblescolon, endrec) -> failure x
   | AttrDefListEmpty  -> failure x
+
+
+and transAttrValue (x : attrValue) : result = match x with
+    MapAttr (beginrec, attrkeyvalues, endrec) -> failure x
+  | ListAttr (beginlist, attrvalues, endlist) -> failure x
+  | LiteralAttr value -> failure x
+  | StringAttr str -> failure x
 
 
 and transParams (x : params) : result = match x with
@@ -180,18 +196,20 @@ and transProcSig (x : procSig) : result = match x with
     ProcedureSig (procident, paramss0, paramss) -> failure x
 
 
-and transProcDef (x : procDef) : result = match x with
-    ProcedureDecl (procsig, attrdeflist, funspecdecls) -> failure x
-  | ProcedureDef (procsig, attrdeflist, funspecdecls, beginlist, blocks, endlist) -> failure x
-
-
-and transExpr (x : expr) : result = match x with
+and transValue (x : value) : result = match x with
     BVLiteral bvval -> failure x
   | IntLiteral intval -> failure x
   | TrueLiteral  -> failure x
   | FalseLiteral  -> failure x
+
+
+and transExpr (x : expr) : result = match x with
+    Literal value -> failure x
   | LRVar localvar -> failure x
   | GRVar globalvar -> failure x
+  | Forall lambdadef -> failure x
+  | Exists lambdadef -> failure x
+  | OldExpr expr -> failure x
   | FunctionOp (globalident, exprs) -> failure x
   | BinaryExpr (binop, expr0, expr) -> failure x
   | UnaryExpr (unop, expr) -> failure x
@@ -199,6 +217,10 @@ and transExpr (x : expr) : result = match x with
   | SignExtend (intval, expr) -> failure x
   | Extract (intval0, intval, expr) -> failure x
   | Concat (expr0, expr) -> failure x
+
+
+and transLambdaDef (x : lambdaDef) : result = match x with
+    LambdaDef1 (localvars, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with
@@ -280,23 +302,23 @@ and transBoolBinOp (x : boolBinOp) : result = match x with
   | BoolBinOp_boolimplies  -> failure x
 
 
-and transREQUIRE (x : rEQUIRE) : result = match x with
-    REQUIRE_require  -> failure x
-  | REQUIRE_requires  -> failure x
+and transRequireTok (x : requireTok) : result = match x with
+    RequireTok_require  -> failure x
+  | RequireTok_requires  -> failure x
 
 
-and transENSURE (x : eNSURE) : result = match x with
-    ENSURE_ensure  -> failure x
-  | ENSURE_ensures  -> failure x
+and transEnsureTok (x : ensureTok) : result = match x with
+    EnsureTok_ensure  -> failure x
+  | EnsureTok_ensures  -> failure x
 
 
 and transFunSpecDecl (x : funSpecDecl) : result = match x with
-    Require (require, expr) -> failure x
-  | Ensure (ensure, expr) -> failure x
+    Require (requiretok, expr) -> failure x
+  | Ensure (ensuretok, expr) -> failure x
   | LoopInvariant (blockident, expr) -> failure x
 
 
-and transProgSpecDecl (x : progSpecDecl) : result = match x with
+and transProgSpec (x : progSpec) : result = match x with
     Rely expr -> failure x
   | Guarantee expr -> failure x
 

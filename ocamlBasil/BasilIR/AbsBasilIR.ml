@@ -10,11 +10,12 @@ and beginList = BeginList of ((int * int) * string)
 and endList = EndList of ((int * int) * string)
 and beginRec = BeginRec of ((int * int) * string)
 and endRec = EndRec of ((int * int) * string)
+and lambdaSep = LambdaSep of string
 and str = Str of string
 and integerHex = IntegerHex of string
-and bitvectorHex = BitvectorHex of string
-and program =
-   Prog of declaration list
+and integerDec = IntegerDec of string
+and moduleT =
+   Module1 of declaration list
 
 and gobbleScolon =
    EmptyScolon
@@ -22,11 +23,18 @@ and gobbleScolon =
 
 and declaration =
    AxiomDecl of attrDefList * expr
- | MemDecl of globalIdent * typeT
+ | SharedMemDecl of globalIdent * typeT
+ | UnsharedMemDecl of globalIdent * typeT
  | VarDecl of globalIdent * typeT
- | ProgDeclSpec of attrDefList * beginList * progSpecDecl list * endList
- | ProgDecl of attrDefList
- | Procedure of procDef
+ | UninterpFunDecl of attrDefList * globalIdent * typeT list * typeT
+ | FunDef of attrDefList * globalIdent * params list * typeT * expr
+ | ProgDeclWithSpec of procIdent * attrDefList * beginList * progSpec list * endList
+ | ProgDecl of procIdent * attrDefList
+ | Procedure of procSig * attrDefList * procDef
+
+and procDef =
+   ProcedureDecl of funSpecDecl list
+ | ProcedureDef of funSpecDecl list * beginList * block list * endList
 
 and intType =
    IntT
@@ -35,7 +43,7 @@ and boolType =
    BoolT
 
 and mapType =
-   MapT of typeT * beginList * typeT * endList
+   MapT of typeT * typeT
 
 and bVType =
    BVT of bVTYPE
@@ -48,7 +56,7 @@ and typeT =
 
 and intVal =
    HexInt of integerHex
- | DecInt of int
+ | DecInt of integerDec
 
 and bVVal =
    BV of intVal * bVType
@@ -94,15 +102,18 @@ and lVar =
 and block =
    Block1 of blockIdent * attrDefList * beginList * statement list * jump * endList
 
-and attributeItem =
-   IntAttr of bIdent * intVal
- | BVAttr of bIdent * bVVal
- | ExprAttr of bIdent * expr
- | StringAttr of bIdent * str
+and attrKeyValue =
+   AttrKeyValue1 of bIdent * attrValue
 
 and attrDefList =
-   AttrDefListSome of beginRec * attributeItem list * gobbleScolon * endRec
+   AttrDefListSome of beginRec * attrKeyValue list * gobbleScolon * endRec
  | AttrDefListEmpty
+
+and attrValue =
+   MapAttr of beginRec * attrKeyValue list * endRec
+ | ListAttr of beginList * attrValue list * endList
+ | LiteralAttr of value
+ | StringAttr of str
 
 and params =
    Param of localIdent * typeT
@@ -110,17 +121,19 @@ and params =
 and procSig =
    ProcedureSig of procIdent * params list * params list
 
-and procDef =
-   ProcedureDecl of procSig * attrDefList * funSpecDecl list
- | ProcedureDef of procSig * attrDefList * funSpecDecl list * beginList * block list * endList
-
-and expr =
+and value =
    BVLiteral of bVVal
  | IntLiteral of intVal
  | TrueLiteral
  | FalseLiteral
+
+and expr =
+   Literal of value
  | LRVar of localVar
  | GRVar of globalVar
+ | Forall of lambdaDef
+ | Exists of lambdaDef
+ | OldExpr of expr
  | FunctionOp of globalIdent * expr list
  | BinaryExpr of binOp * expr * expr
  | UnaryExpr of unOp * expr
@@ -128,6 +141,9 @@ and expr =
  | SignExtend of intVal * expr
  | Extract of intVal * intVal * expr
  | Concat of expr * expr
+
+and lambdaDef =
+   LambdaDef1 of localVar list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp
@@ -199,20 +215,20 @@ and boolBinOp =
  | BoolBinOp_boolor
  | BoolBinOp_boolimplies
 
-and rEQUIRE =
-   REQUIRE_require
- | REQUIRE_requires
+and requireTok =
+   RequireTok_require
+ | RequireTok_requires
 
-and eNSURE =
-   ENSURE_ensure
- | ENSURE_ensures
+and ensureTok =
+   EnsureTok_ensure
+ | EnsureTok_ensures
 
 and funSpecDecl =
-   Require of rEQUIRE * expr
- | Ensure of eNSURE * expr
+   Require of requireTok * expr
+ | Ensure of ensureTok * expr
  | LoopInvariant of blockIdent * expr
 
-and progSpecDecl =
+and progSpec =
    Rely of expr
  | Guarantee of expr
 

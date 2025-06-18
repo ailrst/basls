@@ -7,16 +7,18 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_var KW_prog KW_int KW_bool KW_map KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_block KW_proc KW_true KW_false KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_int KW_bool KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_block KW_proc KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
 %token SYMB3 /* : */
-%token SYMB4 /* := */
+%token SYMB4 /* declare-fun */
 %token SYMB5 /* ( */
 %token SYMB6 /* ) */
-%token SYMB7 /* = */
-%token SYMB8 /* -> */
+%token SYMB7 /* -> */
+%token SYMB8 /* define-fun */
+%token SYMB9 /* = */
+%token SYMB10 /* := */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -34,16 +36,19 @@ open Lexing
 %token <(int * int) * string> TOK_EndList
 %token <(int * int) * string> TOK_BeginRec
 %token <(int * int) * string> TOK_EndRec
+%token <string>               TOK_LambdaSep
 %token <string>               TOK_Str
 %token <string>               TOK_IntegerHex
-%token <string>               TOK_BitvectorHex
+%token <string>               TOK_IntegerDec
 
-%start pProgram pDeclaration_list pBlockIdent_list pGobbleScolon pDeclaration pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pStatement_list pAssignment pStatement pAssignment_list pLocalVar pGlobalVar pLocalVar_list pCallLVars pJump pLVar pLVar_list pBlock_list pBlock pAttributeItem pAttributeItem_list pAttrDefList pParams pParams_list pProcSig pProcDef pExpr pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pREQUIRE pENSURE pFunSpecDecl pProgSpecDecl pFunSpecDecl_list pProgSpecDecl_list
-%type <AbsBasilIR.program> pProgram
+%start pModuleT pDeclaration_list pBlockIdent_list pGobbleScolon pDeclaration pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pStatement_list pAssignment pStatement pAssignment_list pLocalVar pGlobalVar pLocalVar_list pCallLVars pJump pLVar pLVar_list pBlock_list pBlock pAttrKeyValue pAttrKeyValue_list pAttrDefList pAttrValue_list pAttrValue pParams pParams_list pProcSig pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpecDecl pProgSpec pFunSpecDecl_list pProgSpec_list
+%type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.declaration list> pDeclaration_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
 %type <AbsBasilIR.gobbleScolon> pGobbleScolon
 %type <AbsBasilIR.declaration> pDeclaration
+%type <AbsBasilIR.typeT list> pTypeT_list
+%type <AbsBasilIR.procDef> pProcDef
 %type <AbsBasilIR.intType> pIntType
 %type <AbsBasilIR.boolType> pBoolType
 %type <AbsBasilIR.mapType> pMapType
@@ -66,14 +71,17 @@ open Lexing
 %type <AbsBasilIR.lVar list> pLVar_list
 %type <AbsBasilIR.block list> pBlock_list
 %type <AbsBasilIR.block> pBlock
-%type <AbsBasilIR.attributeItem> pAttributeItem
-%type <AbsBasilIR.attributeItem list> pAttributeItem_list
+%type <AbsBasilIR.attrKeyValue> pAttrKeyValue
+%type <AbsBasilIR.attrKeyValue list> pAttrKeyValue_list
 %type <AbsBasilIR.attrDefList> pAttrDefList
+%type <AbsBasilIR.attrValue list> pAttrValue_list
+%type <AbsBasilIR.attrValue> pAttrValue
 %type <AbsBasilIR.params> pParams
 %type <AbsBasilIR.params list> pParams_list
 %type <AbsBasilIR.procSig> pProcSig
-%type <AbsBasilIR.procDef> pProcDef
+%type <AbsBasilIR.value> pValue
 %type <AbsBasilIR.expr> pExpr
+%type <AbsBasilIR.lambdaDef> pLambdaDef
 %type <AbsBasilIR.binOp> pBinOp
 %type <AbsBasilIR.unOp> pUnOp
 %type <AbsBasilIR.eqOp> pEqOp
@@ -83,18 +91,20 @@ open Lexing
 %type <AbsBasilIR.intBinOp> pIntBinOp
 %type <AbsBasilIR.intLogicalBinOp> pIntLogicalBinOp
 %type <AbsBasilIR.boolBinOp> pBoolBinOp
-%type <AbsBasilIR.rEQUIRE> pREQUIRE
-%type <AbsBasilIR.eNSURE> pENSURE
+%type <AbsBasilIR.requireTok> pRequireTok
+%type <AbsBasilIR.ensureTok> pEnsureTok
 %type <AbsBasilIR.funSpecDecl> pFunSpecDecl
-%type <AbsBasilIR.progSpecDecl> pProgSpecDecl
+%type <AbsBasilIR.progSpec> pProgSpec
 %type <AbsBasilIR.funSpecDecl list> pFunSpecDecl_list
-%type <AbsBasilIR.progSpecDecl list> pProgSpecDecl_list
+%type <AbsBasilIR.progSpec list> pProgSpec_list
 
-%type <AbsBasilIR.program> program
+%type <AbsBasilIR.moduleT> moduleT
 %type <AbsBasilIR.declaration list> declaration_list
 %type <AbsBasilIR.blockIdent list> blockIdent_list
 %type <AbsBasilIR.gobbleScolon> gobbleScolon
 %type <AbsBasilIR.declaration> declaration
+%type <AbsBasilIR.typeT list> typeT_list
+%type <AbsBasilIR.procDef> procDef
 %type <AbsBasilIR.intType> intType
 %type <AbsBasilIR.boolType> boolType
 %type <AbsBasilIR.mapType> mapType
@@ -117,14 +127,17 @@ open Lexing
 %type <AbsBasilIR.lVar list> lVar_list
 %type <AbsBasilIR.block list> block_list
 %type <AbsBasilIR.block> block
-%type <AbsBasilIR.attributeItem> attributeItem
-%type <AbsBasilIR.attributeItem list> attributeItem_list
+%type <AbsBasilIR.attrKeyValue> attrKeyValue
+%type <AbsBasilIR.attrKeyValue list> attrKeyValue_list
 %type <AbsBasilIR.attrDefList> attrDefList
+%type <AbsBasilIR.attrValue list> attrValue_list
+%type <AbsBasilIR.attrValue> attrValue
 %type <AbsBasilIR.params> params
 %type <AbsBasilIR.params list> params_list
 %type <AbsBasilIR.procSig> procSig
-%type <AbsBasilIR.procDef> procDef
+%type <AbsBasilIR.value> value
 %type <AbsBasilIR.expr> expr
+%type <AbsBasilIR.lambdaDef> lambdaDef
 %type <AbsBasilIR.binOp> binOp
 %type <AbsBasilIR.unOp> unOp
 %type <AbsBasilIR.eqOp> eqOp
@@ -134,14 +147,13 @@ open Lexing
 %type <AbsBasilIR.intBinOp> intBinOp
 %type <AbsBasilIR.intLogicalBinOp> intLogicalBinOp
 %type <AbsBasilIR.boolBinOp> boolBinOp
-%type <AbsBasilIR.rEQUIRE> rEQUIRE
-%type <AbsBasilIR.eNSURE> eNSURE
+%type <AbsBasilIR.requireTok> requireTok
+%type <AbsBasilIR.ensureTok> ensureTok
 %type <AbsBasilIR.funSpecDecl> funSpecDecl
-%type <AbsBasilIR.progSpecDecl> progSpecDecl
+%type <AbsBasilIR.progSpec> progSpec
 %type <AbsBasilIR.funSpecDecl list> funSpecDecl_list
-%type <AbsBasilIR.progSpecDecl list> progSpecDecl_list
+%type <AbsBasilIR.progSpec list> progSpec_list
 
-%type <int> int
 %type <AbsBasilIR.bVTYPE> bVTYPE
 %type <AbsBasilIR.bIdent> bIdent
 %type <AbsBasilIR.localIdent> localIdent
@@ -152,13 +164,14 @@ open Lexing
 %type <AbsBasilIR.endList> endList
 %type <AbsBasilIR.beginRec> beginRec
 %type <AbsBasilIR.endRec> endRec
+%type <AbsBasilIR.lambdaSep> lambdaSep
 %type <AbsBasilIR.str> str
 %type <AbsBasilIR.integerHex> integerHex
-%type <AbsBasilIR.bitvectorHex> bitvectorHex
+%type <AbsBasilIR.integerDec> integerDec
 
 %%
 
-pProgram : program TOK_EOF { $1 };
+pModuleT : moduleT TOK_EOF { $1 };
 
 pDeclaration_list : declaration_list TOK_EOF { $1 };
 
@@ -167,6 +180,10 @@ pBlockIdent_list : blockIdent_list TOK_EOF { $1 };
 pGobbleScolon : gobbleScolon TOK_EOF { $1 };
 
 pDeclaration : declaration TOK_EOF { $1 };
+
+pTypeT_list : typeT_list TOK_EOF { $1 };
+
+pProcDef : procDef TOK_EOF { $1 };
 
 pIntType : intType TOK_EOF { $1 };
 
@@ -212,11 +229,15 @@ pBlock_list : block_list TOK_EOF { $1 };
 
 pBlock : block TOK_EOF { $1 };
 
-pAttributeItem : attributeItem TOK_EOF { $1 };
+pAttrKeyValue : attrKeyValue TOK_EOF { $1 };
 
-pAttributeItem_list : attributeItem_list TOK_EOF { $1 };
+pAttrKeyValue_list : attrKeyValue_list TOK_EOF { $1 };
 
 pAttrDefList : attrDefList TOK_EOF { $1 };
+
+pAttrValue_list : attrValue_list TOK_EOF { $1 };
+
+pAttrValue : attrValue TOK_EOF { $1 };
 
 pParams : params TOK_EOF { $1 };
 
@@ -224,9 +245,11 @@ pParams_list : params_list TOK_EOF { $1 };
 
 pProcSig : procSig TOK_EOF { $1 };
 
-pProcDef : procDef TOK_EOF { $1 };
+pValue : value TOK_EOF { $1 };
 
 pExpr : expr TOK_EOF { $1 };
+
+pLambdaDef : lambdaDef TOK_EOF { $1 };
 
 pBinOp : binOp TOK_EOF { $1 };
 
@@ -246,19 +269,19 @@ pIntLogicalBinOp : intLogicalBinOp TOK_EOF { $1 };
 
 pBoolBinOp : boolBinOp TOK_EOF { $1 };
 
-pREQUIRE : rEQUIRE TOK_EOF { $1 };
+pRequireTok : requireTok TOK_EOF { $1 };
 
-pENSURE : eNSURE TOK_EOF { $1 };
+pEnsureTok : ensureTok TOK_EOF { $1 };
 
 pFunSpecDecl : funSpecDecl TOK_EOF { $1 };
 
-pProgSpecDecl : progSpecDecl TOK_EOF { $1 };
+pProgSpec : progSpec TOK_EOF { $1 };
 
 pFunSpecDecl_list : funSpecDecl_list TOK_EOF { $1 };
 
-pProgSpecDecl_list : progSpecDecl_list TOK_EOF { $1 };
+pProgSpec_list : progSpec_list TOK_EOF { $1 };
 
-program : declaration_list { Prog $1 }
+moduleT : declaration_list { Module1 $1 }
   ;
 
 declaration_list : /* empty */ { []  }
@@ -275,11 +298,23 @@ gobbleScolon : /* empty */ { EmptyScolon  }
   ;
 
 declaration : KW_axiom attrDefList expr { AxiomDecl ($2, $3) }
-  | KW_memory globalIdent SYMB3 typeT { MemDecl ($2, $4) }
+  | KW_memory KW_shared globalIdent SYMB3 typeT { SharedMemDecl ($3, $5) }
+  | KW_memory globalIdent SYMB3 typeT { UnsharedMemDecl ($2, $4) }
   | KW_var globalIdent SYMB3 typeT { VarDecl ($2, $4) }
-  | KW_prog attrDefList beginList progSpecDecl_list endList { ProgDeclSpec ($2, $3, $4, $5) }
-  | KW_prog attrDefList { ProgDecl $2 }
-  | procDef { Procedure $1 }
+  | SYMB4 attrDefList globalIdent SYMB3 SYMB5 typeT_list SYMB6 SYMB7 typeT { UninterpFunDecl ($2, $3, $6, $9) }
+  | SYMB8 attrDefList globalIdent SYMB5 params_list SYMB6 SYMB7 typeT SYMB9 expr { FunDef ($2, $3, $5, $8, $10) }
+  | KW_prog KW_entry procIdent attrDefList beginList progSpec_list endList { ProgDeclWithSpec ($3, $4, $5, $6, $7) }
+  | KW_prog KW_entry procIdent attrDefList { ProgDecl ($3, $4) }
+  | procSig attrDefList procDef { Procedure ($1, $2, $3) }
+  ;
+
+typeT_list : /* empty */ { []  }
+  | typeT { (fun x -> [x]) $1 }
+  | typeT SYMB2 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+procDef : funSpecDecl_list { ProcedureDecl $1 }
+  | funSpecDecl_list beginList block_list endList { ProcedureDef ($1, $2, $3, $4) }
   ;
 
 intType : KW_int { IntT  }
@@ -288,7 +323,7 @@ intType : KW_int { IntT  }
 boolType : KW_bool { BoolT  }
   ;
 
-mapType : KW_map typeT beginList typeT endList { MapT ($2, $3, $4, $5) }
+mapType : SYMB5 typeT SYMB7 typeT SYMB6 { MapT ($2, $4) }
   ;
 
 bVType : bVTYPE { BVT $1 }
@@ -306,7 +341,7 @@ expr_list : /* empty */ { []  }
   ;
 
 intVal : integerHex { HexInt $1 }
-  | int { DecInt $1 }
+  | integerDec { DecInt $1 }
   ;
 
 bVVal : intVal SYMB3 bVType { BV ($1, $3) }
@@ -320,12 +355,12 @@ statement_list : /* empty */ { []  }
   | statement SYMB1 statement_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-assignment : lVar SYMB4 expr { Assignment1 ($1, $3) }
+assignment : lVar SYMB10 expr { Assignment1 ($1, $3) }
   ;
 
 statement : assignment { Assign $1 }
   | SYMB5 assignment_list SYMB6 { SimulAssign $2 }
-  | lVar SYMB4 KW_load endian globalIdent expr intVal { SLoad ($1, $4, $5, $6, $7) }
+  | lVar SYMB10 KW_load endian globalIdent expr intVal { SLoad ($1, $4, $5, $6, $7) }
   | KW_store endian globalIdent expr expr intVal { SStore ($2, $3, $4, $5, $6) }
   | callLVars KW_call procIdent SYMB5 expr_list SYMB6 { DirectCall ($1, $3, $5) }
   | KW_indirect KW_call expr { IndirectCall $3 }
@@ -349,8 +384,8 @@ localVar_list : localVar { (fun x -> [x]) $1 }
   ;
 
 callLVars : /* empty */ { NoOutParams  }
-  | KW_var SYMB5 localVar_list SYMB6 SYMB4 { LocalVars $3 }
-  | SYMB5 lVar_list SYMB6 SYMB4 { ListOutParams $2 }
+  | KW_var SYMB5 localVar_list SYMB6 SYMB10 { LocalVars $3 }
+  | SYMB5 lVar_list SYMB6 SYMB10 { ListOutParams $2 }
   ;
 
 jump : KW_goto SYMB5 blockIdent_list SYMB6 { GoTo $3 }
@@ -374,19 +409,27 @@ block_list : /* empty */ { []  }
 block : KW_block blockIdent attrDefList beginList statement_list jump SYMB1 endList { Block1 ($2, $3, $4, $5, $6, $8) }
   ;
 
-attributeItem : bIdent SYMB7 intVal { IntAttr ($1, $3) }
-  | bIdent SYMB7 bVVal { BVAttr ($1, $3) }
-  | bIdent SYMB7 expr { ExprAttr ($1, $3) }
-  | bIdent SYMB7 str { StringAttr ($1, $3) }
+attrKeyValue : bIdent SYMB9 attrValue { AttrKeyValue1 ($1, $3) }
   ;
 
-attributeItem_list : /* empty */ { []  }
-  | attributeItem { (fun x -> [x]) $1 }
-  | attributeItem SYMB1 attributeItem_list { (fun (x,xs) -> x::xs) ($1, $3) }
+attrKeyValue_list : /* empty */ { []  }
+  | attrKeyValue { (fun x -> [x]) $1 }
+  | attrKeyValue SYMB1 attrKeyValue_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-attrDefList : beginRec attributeItem_list gobbleScolon endRec { AttrDefListSome ($1, $2, $3, $4) }
+attrDefList : beginRec attrKeyValue_list gobbleScolon endRec { AttrDefListSome ($1, $2, $3, $4) }
   | /* empty */ { AttrDefListEmpty  }
+  ;
+
+attrValue_list : /* empty */ { []  }
+  | attrValue { (fun x -> [x]) $1 }
+  | attrValue SYMB1 attrValue_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+attrValue : beginRec attrKeyValue_list endRec { MapAttr ($1, $2, $3) }
+  | beginList attrValue_list endList { ListAttr ($1, $2, $3) }
+  | value { LiteralAttr $1 }
+  | str { StringAttr $1 }
   ;
 
 params : localIdent SYMB3 typeT { Param ($1, $3) }
@@ -397,19 +440,21 @@ params_list : /* empty */ { []  }
   | params SYMB2 params_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-procSig : KW_proc procIdent SYMB5 params_list SYMB6 SYMB8 SYMB5 params_list SYMB6 { ProcedureSig ($2, $4, $8) }
+procSig : KW_proc procIdent SYMB5 params_list SYMB6 SYMB7 SYMB5 params_list SYMB6 { ProcedureSig ($2, $4, $8) }
   ;
 
-procDef : procSig attrDefList funSpecDecl_list { ProcedureDecl ($1, $2, $3) }
-  | procSig attrDefList funSpecDecl_list beginList block_list endList { ProcedureDef ($1, $2, $3, $4, $5, $6) }
-  ;
-
-expr : bVVal { BVLiteral $1 }
+value : bVVal { BVLiteral $1 }
   | intVal { IntLiteral $1 }
   | KW_true { TrueLiteral  }
   | KW_false { FalseLiteral  }
+  ;
+
+expr : value { Literal $1 }
   | localVar { LRVar $1 }
   | globalVar { GRVar $1 }
+  | KW_forall lambdaDef { Forall $2 }
+  | KW_exists lambdaDef { Exists $2 }
+  | KW_old SYMB5 expr SYMB6 { OldExpr $3 }
   | globalIdent SYMB5 expr_list SYMB6 { FunctionOp ($1, $3) }
   | binOp SYMB5 expr SYMB2 expr SYMB6 { BinaryExpr ($1, $3, $5) }
   | unOp SYMB5 expr SYMB6 { UnaryExpr ($1, $3) }
@@ -417,6 +462,9 @@ expr : bVVal { BVLiteral $1 }
   | KW_sign_extend SYMB5 intVal SYMB2 expr SYMB6 { SignExtend ($3, $5) }
   | KW_extract SYMB5 intVal SYMB2 intVal SYMB2 expr SYMB6 { Extract ($3, $5, $7) }
   | KW_bvconcat SYMB5 expr SYMB2 expr SYMB6 { Concat ($3, $5) }
+  ;
+
+lambdaDef : SYMB5 localVar_list SYMB6 lambdaSep expr { LambdaDef1 ($2, $4, $5) }
   ;
 
 binOp : bVBinOp { BinOpBVBinOp $1 }
@@ -489,20 +537,20 @@ boolBinOp : KW_booland { BoolBinOp_booland  }
   | KW_boolimplies { BoolBinOp_boolimplies  }
   ;
 
-rEQUIRE : KW_require { REQUIRE_require  }
-  | KW_requires { REQUIRE_requires  }
+requireTok : KW_require { RequireTok_require  }
+  | KW_requires { RequireTok_requires  }
   ;
 
-eNSURE : KW_ensure { ENSURE_ensure  }
-  | KW_ensures { ENSURE_ensures  }
+ensureTok : KW_ensure { EnsureTok_ensure  }
+  | KW_ensures { EnsureTok_ensures  }
   ;
 
-funSpecDecl : rEQUIRE expr { Require ($1, $2) }
-  | eNSURE expr { Ensure ($1, $2) }
+funSpecDecl : requireTok expr { Require ($1, $2) }
+  | ensureTok expr { Ensure ($1, $2) }
   | KW_invariant blockIdent expr { LoopInvariant ($2, $3) }
   ;
 
-progSpecDecl : KW_rely expr { Rely $2 }
+progSpec : KW_rely expr { Rely $2 }
   | KW_guarantee expr { Guarantee $2 }
   ;
 
@@ -510,11 +558,10 @@ funSpecDecl_list : /* empty */ { []  }
   | funSpecDecl SYMB1 funSpecDecl_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-progSpecDecl_list : /* empty */ { []  }
-  | progSpecDecl SYMB1 progSpecDecl_list { (fun (x,xs) -> x::xs) ($1, $3) }
+progSpec_list : /* empty */ { []  }
+  | progSpec SYMB1 progSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-int :  TOK_Integer  { $1 };
 bVTYPE : TOK_BVTYPE { BVTYPE ($1)};
 bIdent : TOK_BIdent { BIdent ($1)};
 localIdent : TOK_LocalIdent { LocalIdent ($1)};
@@ -525,7 +572,8 @@ beginList : TOK_BeginList { BeginList ($1)};
 endList : TOK_EndList { EndList ($1)};
 beginRec : TOK_BeginRec { BeginRec ($1)};
 endRec : TOK_EndRec { EndRec ($1)};
+lambdaSep : TOK_LambdaSep { LambdaSep ($1)};
 str : TOK_Str { Str ($1)};
 integerHex : TOK_IntegerHex { IntegerHex ($1)};
-bitvectorHex : TOK_BitvectorHex { BitvectorHex ($1)};
+integerDec : TOK_IntegerDec { IntegerDec ($1)};
 
