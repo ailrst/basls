@@ -97,13 +97,13 @@ type def_info = {
 }
 
 let range_of_position (linebreaks : linebreaks) (p1 : position)
-    (p2 : position) : Lsp.Types.Range.t =
+    (p2 : position) : Linol_lsp.Types.Range.t =
   let lsp_position (p : position) =
     let begin_line = get_begin_line linebreaks p.pos_cnum in
-    Lsp.Types.Position.create ~character:(p.pos_cnum - begin_line)
+    Linol_lsp.Types.Position.create ~character:(p.pos_cnum - begin_line)
       ~line:(p.pos_lnum - 1)
   in
-  Lsp.Types.Range.create ~end_:(lsp_position p2) ~start:(lsp_position p1)
+  Linol_lsp.Types.Range.create ~end_:(lsp_position p2) ~start:(lsp_position p1)
 
 let token_of_char_range (linebreaks : linebreaks) (p1 : int) (p2 : int) :
     Token.t =
@@ -159,9 +159,9 @@ module Processor = struct
     block_refs : string TokenMap.t;
   }
 
-  let get_syms (s : symbs) : DocumentSymbol.t list =
+  let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
-      Linol_lwt.DocumentSymbol.create ~kind:Lsp.Types.SymbolKind.Method
+      Linol_lwt.DocumentSymbol.create ~kind:Linol_lsp.Types.SymbolKind.Method
         ~name:blockname
         ~selectionRange:(Token.to_range def.label_tok)
         ~range:(LineCol.range def.range_start def.range_end)
@@ -174,7 +174,7 @@ module Processor = struct
         |> List.map (fun (id, t) -> block_sym id t)
       in
       Linol_lwt.DocumentSymbol.create ~children
-        ~kind:Lsp.Types.SymbolKind.Class ~name:procname
+        ~kind:Linol_lsp.Types.SymbolKind.Class ~name:procname
         ~selectionRange:(Token.to_range def.label_tok)
         ~range:(LineCol.range def.range_start def.range_end)
         ()
@@ -365,15 +365,15 @@ let process_some_input_file (_file_contents : string) :
   process _file_contents
 
 let diagnostics (_state : state_after_processing) :
-    Lsp.Types.Diagnostic.t list =
+    Linol_lsp.Types.Diagnostic.t list =
   match _state.ast with
   | Ast _ -> []
   | SyntaxError (l, p1, p2) ->
       [
-        Lsp.Types.Diagnostic.create
-          ~message:("Syntax error: '" ^ l ^ "'")
+        Linol_lsp.Types.Diagnostic.create
+          ~message:(`String ("Syntax error: '" ^ l ^ "'"))
           ~range:(range_of_position _state.linebreaks p1 p2)
-          ~severity:Lsp.Types.DiagnosticSeverity.Error ();
+          ~severity:Linol_lsp.Types.DiagnosticSeverity.Error ();
       ]
 
 open Linol_lwt.Locations
@@ -384,7 +384,7 @@ class lsp_server =
     inherit Linol_lwt.Jsonrpc2.server
 
     (* one env per document *)
-    val buffers : (Lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t
+    val buffers : (Linol_lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t
         =
       Hashtbl.create 32
 
@@ -398,7 +398,7 @@ class lsp_server =
               ~workDoneProgress:true ()))
 
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
-        (uri : Lsp.Types.DocumentUri.t) (contents : string) =
+        (uri : Linol_lsp.Types.DocumentUri.t) (contents : string) =
       let new_state = process_some_input_file contents in
       Hashtbl.replace buffers uri new_state;
       let diags = diagnostics new_state in
