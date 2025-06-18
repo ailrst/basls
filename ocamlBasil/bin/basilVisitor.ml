@@ -13,7 +13,7 @@ open Visitor
 
 class type basilVisitor = object
   method vdecl : declaration -> declaration visitAction
-  method vprog : program -> program visitAction
+  method vprog : moduleT -> moduleT visitAction
   method vproc : procDef -> (procDef) visitAction
   method vblock : block -> block visitAction
   method vstmt : statement -> statement visitAction
@@ -43,21 +43,21 @@ let nochildren x y = y
     visit_stmts is left abstract for subclasses to implement. *)
 class virtual basilTreeVisitor (vis : #basilVisitor) =
   object (self)
-    method visit_prog (p : program) : program =
+    method visit_prog (p : moduleT) : moduleT =
       let next _ p =
-        match p with Prog decls -> Prog (mapNoCopy self#visit_decl decls)
+        match p with Module1 decls -> Module1 (mapNoCopy self#visit_decl decls)
       in
       doVisit vis (vis#vprog p) next p
 
     method visit_procdef (p : procDef) : procDef =
       let ndef v def =
         match def with
-        | ProcedureDecl (ProcedureSig (procID, inparam, outparam), attrlist, spec)
+        | ProcedureDecl (specList)
           as decl ->
             decl
-        | ProcedureDef (procsig, attrlist, specList, b, blocks, e) ->
+        | ProcedureDef (specList, b, blocks, e) ->
             let blocks = mapNoCopy self#visit_block blocks in
-            ProcedureDef (procsig, attrlist, specList, b, blocks, e)
+            ProcedureDef (specList, b, blocks, e)
       in
       doVisit vis (vis#vproc p) ndef p
 
@@ -66,12 +66,13 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         match p with
         | AxiomDecl _ -> p
         | ProgDecl _ -> p
-        | ProgDeclSpec _ -> p
-        | MemDecl _ -> p
+        | ProgDeclWithSpec _ -> p
+        | SharedMemDecl _ -> p
+        | UnsharedMemDecl _ -> p
         | VarDecl _ -> p
-        | Procedure p ->
-            let ndef = self#visit_procdef p in
-            Procedure ndef
+        | Procedure (procSig, attrs, def) ->
+            let ndef = self#visit_procdef def in
+            Procedure (procSig, attrs, def)
       in
       doVisit vis (vis#vdecl p) next p
 
@@ -102,7 +103,7 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
 class nopBasilVisitor : basilVisitor =
   object
     method vdecl (_ : declaration) = DoChildren
-    method vprog (_ : program) = DoChildren
+    method vprog (_ : moduleT) = DoChildren
     method vproc (_ : procDef) = DoChildren
     method vblock (_ : block) = DoChildren
     method vstmt (_ : statement) = DoChildren
@@ -115,7 +116,7 @@ class forwardBasilvisitor (vis : #basilVisitor) =
     inherit basilTreeVisitor vis
   end
 
-let visit_prog (vis : #basilVisitor) (p : program) =
+let visit_prog (vis : #basilVisitor) (p : moduleT) =
   (new forwardBasilvisitor vis)#visit_prog p
 
 let visit_block (vis : #basilVisitor) (p : block) =

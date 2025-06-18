@@ -270,37 +270,32 @@ module Processor = struct
           r;
         SkipChildren
 
-      method! vproc (p : procDef) =
-        let ident, b, e =
-          match p with
-          | ProcedureDef
-              ( ProcedureSig (ProcIdent (bpos, ident), _, _),
-                attrl,
-                specl,
-                bl,
-                blocks,
-                EndList (epos, _) ) ->
-              (ident, bpos, epos)
-          | ProcedureDecl
-              ( ProcedureSig (ProcIdent (bpos, ident), _, _),
-                AttrDefListSome (_, _, _, EndRec (epos, _)), specl ) ->
-              (ident, bpos, epos)
-          | ProcedureDecl
-              (ProcedureSig (ProcIdent (bpos, ident), _, _), AttrDefListEmpty, _) -> (ident, bpos, bpos)
+
+      method! vdecl (d : declaration) = 
+        let get_end = function 
+            | ProcedureDef (spec, bl, blocks, EndList (pos, _)) -> Some pos
+            | _ -> None
         in
-        let pos, id = unpack_ident (BIdent (b, ident)) linebreaks in
-        let pd : def_info =
-          {
-            label = id;
-            label_tok = pos;
-            range_start = Token.begin_linecol pos;
-            range_end = loc_of_char_pos linebreaks (snd e);
-          }
-        in
-        proc_defs <- StringMap.add id pd proc_defs;
-        current_proc <- Some id;
-        proc_children <- StringMap.add id [] proc_children;
-        DoChildren
+
+        begin match d with 
+          | Procedure (( ProcedureSig (ProcIdent (b, ident), _, _)), attr, def) -> begin 
+            let e = get_end def |> function | Some(e) -> e | None -> b in
+            let pos, id = unpack_ident (BIdent (b, ident)) linebreaks in
+            let pd : def_info =
+              {
+                label = id;
+                label_tok = pos;
+                range_start = Token.begin_linecol pos;
+                range_end = loc_of_char_pos linebreaks (snd e);
+              }
+            in
+            proc_defs <- StringMap.add id pd proc_defs;
+            current_proc <- Some id;
+            proc_children <- StringMap.add id [] proc_children
+          end
+          | _ -> ()
+      end ; DoChildren
+
 
       method! vblock (b : block) =
         match b with
@@ -321,7 +316,7 @@ module Processor = struct
             DoChildren
     end
 
-  let get_symbs (linebreaks : linebreaks) (p : program) =
+  let get_symbs (linebreaks : linebreaks) (p : moduleT) =
     let vis = new getBlocks linebreaks in
     let _ = visit_prog vis p in
     {
@@ -333,22 +328,22 @@ module Processor = struct
     }
 end
 
-let parse (c : in_channel) : AbsBasilIR.program =
+let parse (c : in_channel) : AbsBasilIR.moduleT =
   let lexbuf = Lexing.from_channel c in
-  try ParBasilIR.pProgram LexBasilIR.token lexbuf
+  try ParBasilIR.pModuleT LexBasilIR.token lexbuf
   with ParBasilIR.Error ->
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
     raise (BNFC_Util.Parse_error (start_pos, end_pos))
 
-let showTree (t : AbsBasilIR.program) : string =
+let showTree (t : AbsBasilIR.moduleT) : string =
   "[Linearized tree]\n\n"
-  ^ PrintBasilIR.printTree PrintBasilIR.prtProgram t
+  ^ PrintBasilIR.printTree PrintBasilIR.prtModuleT t
   ^ "\n"
 
 type doc_ast =
   | SyntaxError of (string * position * position)
-  | Ast of AbsBasilIR.program * Processor.symbs
+  | Ast of AbsBasilIR.moduleT * Processor.symbs
 
 type state_after_processing = { linebreaks : linebreaks; ast : doc_ast }
 
@@ -356,7 +351,7 @@ let process (s : string) : state_after_processing =
   let lexbuf = Lexing.from_string s in
   let linebreaks = Processor.linebreaks s in
   try
-    let prog = ParBasilIR.pProgram LexBasilIR.token lexbuf in
+    let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
     let syms = Processor.get_symbs linebreaks prog in
     (*Processor.print_syms syms; *)
     { linebreaks; ast = Ast (prog, syms) }
@@ -376,7 +371,7 @@ let diagnostics (_state : state_after_processing) :
   | SyntaxError (l, p1, p2) ->
       [
         Lsp.Types.Diagnostic.create
-          ~message:(`String ("Syntax error: '" ^ l ^ "'"))
+          ~message:("Syntax error: '" ^ l ^ "'")
           ~range:(range_of_position _state.linebreaks p1 p2)
           ~severity:Lsp.Types.DiagnosticSeverity.Error ();
       ]
