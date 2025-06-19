@@ -14,7 +14,7 @@ open Visitor
 class type basilVisitor = object
   method vdecl : declaration -> declaration visitAction
   method vprog : moduleT -> moduleT visitAction
-  method vproc : procDef -> (procDef) visitAction
+  method vproc : procDef -> procDef visitAction
   method vblock : block -> block visitAction
   method vstmt : statement -> statement visitAction
   method vjump : jump -> jump visitAction
@@ -45,16 +45,15 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
   object (self)
     method visit_prog (p : moduleT) : moduleT =
       let next _ p =
-        match p with Module1 decls -> Module1 (mapNoCopy self#visit_decl decls)
+        match p with
+        | Module1 decls -> Module1 (mapNoCopy self#visit_decl decls)
       in
       doVisit vis (vis#vprog p) next p
 
     method visit_procdef (p : procDef) : procDef =
       let ndef v def =
         match def with
-        | ProcedureDecl (specList)
-          as decl ->
-            decl
+        | ProcedureDecl specList as decl -> decl
         | ProcedureDef (specList, b, blocks, e) ->
             let blocks = mapNoCopy self#visit_block blocks in
             ProcedureDef (specList, b, blocks, e)
@@ -70,9 +69,11 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | SharedMemDecl _ -> p
         | UnsharedMemDecl _ -> p
         | VarDecl _ -> p
+        | UninterpFunDecl _ -> p
+        | FunDef _ -> p
         | Procedure (procSig, attrs, def) ->
             let ndef = self#visit_procdef def in
-            Procedure (procSig, attrs, def)
+            Procedure (procSig, attrs, ndef)
       in
       doVisit vis (vis#vdecl p) next p
 

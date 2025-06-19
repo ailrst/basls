@@ -10,12 +10,11 @@ module IntSet = Set.Make (Int)
 let debug = false
 let oc = if debug then Some (open_out ".basillsplog") else None
 
-let bident_of_blockident = function 
-    | AbsBasilIR.BlockIdent x -> AbsBasilIR.BIdent x
+let bident_of_blockident = function
+  | AbsBasilIR.BlockIdent x -> AbsBasilIR.BIdent x
 
-let bident_of_procident = function 
-    | AbsBasilIR.ProcIdent x -> AbsBasilIR.BIdent x
-
+let bident_of_procident = function
+  | AbsBasilIR.ProcIdent x -> AbsBasilIR.BIdent x
 
 let log (s : string) =
   Option.iter
@@ -103,7 +102,8 @@ let range_of_position (linebreaks : linebreaks) (p1 : position)
     Linol_lsp.Types.Position.create ~character:(p.pos_cnum - begin_line)
       ~line:(p.pos_lnum - 1)
   in
-  Linol_lsp.Types.Range.create ~end_:(lsp_position p2) ~start:(lsp_position p1)
+  Linol_lsp.Types.Range.create ~end_:(lsp_position p2)
+    ~start:(lsp_position p1)
 
 let token_of_char_range (linebreaks : linebreaks) (p1 : int) (p2 : int) :
     Token.t =
@@ -210,7 +210,9 @@ module Processor = struct
     | x -> x
 
   let unpack_blockident id linebreaks =
-    match id with BlockIdent (_, n) -> (token_of_bident linebreaks (bident_of_blockident id), n)
+    match id with
+    | BlockIdent (_, n) ->
+        (token_of_bident linebreaks (bident_of_blockident id), n)
 
   let unpack_ident id linebreaks =
     match id with BIdent (_, n) -> (token_of_bident linebreaks id, n)
@@ -265,21 +267,22 @@ module Processor = struct
         in
         Option.iter
           (fun id ->
-            let pos, ident = unpack_ident (bident_of_procident id) linebreaks in
+            let pos, ident =
+              unpack_ident (bident_of_procident id) linebreaks
+            in
             proc_refs <- TokenMap.add pos ident proc_refs)
           r;
         SkipChildren
 
-
-      method! vdecl (d : declaration) = 
-        let get_end = function 
-            | ProcedureDef (spec, bl, blocks, EndList (pos, _)) -> Some pos
-            | _ -> None
+      method! vdecl (d : declaration) =
+        let get_end = function
+          | ProcedureDef (spec, bl, blocks, EndList (pos, _)) -> Some pos
+          | _ -> None
         in
 
-        begin match d with 
-          | Procedure (( ProcedureSig (ProcIdent (b, ident), _, _)), attr, def) -> begin 
-            let e = get_end def |> function | Some(e) -> e | None -> b in
+        (match d with
+        | Procedure (ProcedureSig (ProcIdent (b, ident), _, _), attr, def) ->
+            let e = get_end def |> function Some e -> e | None -> b in
             let pos, id = unpack_ident (BIdent (b, ident)) linebreaks in
             let pd : def_info =
               {
@@ -292,15 +295,15 @@ module Processor = struct
             proc_defs <- StringMap.add id pd proc_defs;
             current_proc <- Some id;
             proc_children <- StringMap.add id [] proc_children
-          end
-          | _ -> ()
-      end ; DoChildren
-
+        | _ -> ());
+        DoChildren
 
       method! vblock (b : block) =
         match b with
         | Block1 (id, _, bg, _, _, ed) ->
-            let pos, id = unpack_ident (bident_of_blockident id) linebreaks in
+            let pos, id =
+              unpack_ident (bident_of_blockident id) linebreaks
+            in
             let proc = Option.get current_proc in
             let nblocks = id :: StringMap.find proc proc_children in
             let blockdef =
@@ -384,8 +387,8 @@ class lsp_server =
     inherit Linol_lwt.Jsonrpc2.server
 
     (* one env per document *)
-    val buffers : (Linol_lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t
-        =
+    val buffers
+        : (Linol_lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t =
       Hashtbl.create 32
 
     method spawn_query_handler f = Linol_lwt.spawn f
