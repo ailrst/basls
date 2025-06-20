@@ -19,7 +19,11 @@
 (package
  (name basil_lsp)
  (synopsis "LSP for BASIL IR")
- (depends ocaml dune linol linol-lwt lsp)
+ (depends ocaml dune menhir 
+          (linol (="0.10")) 
+          (linol-lwt (="0.10")) 
+          (lsp (>="1.22.0")) 
+          )
  (tags
   (lsp)))
 

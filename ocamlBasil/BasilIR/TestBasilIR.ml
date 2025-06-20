@@ -2,11 +2,11 @@
 
 open Lexing
 
-let parse (c : in_channel) : AbsBasilIR.program =
+let parse (c : in_channel) : AbsBasilIR.moduleT =
     let lexbuf = Lexing.from_channel c
     in
     try
-      ParBasilIR.pProgram LexBasilIR.token lexbuf
+      ParBasilIR.pModuleT LexBasilIR.token lexbuf
     with
       ParBasilIR.Error ->
         let start_pos = Lexing.lexeme_start_p lexbuf
@@ -14,11 +14,11 @@ let parse (c : in_channel) : AbsBasilIR.program =
         in  raise (BNFC_Util.Parse_error (start_pos, end_pos))
 ;;
 
-let showTree (t : AbsBasilIR.program) : string =
+let showTree (t : AbsBasilIR.moduleT) : string =
     "[Abstract syntax]\n\n"^
-    ShowBasilIR.show (ShowBasilIR.showProgram t)^ "\n\n"^
+    ShowBasilIR.show (ShowBasilIR.showModuleT t)^ "\n\n"^
     "[Linearized tree]\n\n"^
-    PrintBasilIR.printTree PrintBasilIR.prtProgram t^ "\n"
+    PrintBasilIR.printTree PrintBasilIR.prtModuleT t^ "\n"
 ;;
 
 let main () =

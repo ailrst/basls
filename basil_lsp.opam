@@ -11,9 +11,10 @@ bug-reports: "https://github.com/ailrst/basls/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.16"}
-  "linol"
-  "linol-lwt"
-  "lsp"
+  "menhir"
+  "linol" {= "0.10"}
+  "linol-lwt" {= "0.10"}
+  "lsp" {>= "1.22.0"}
   "odoc" {with-doc}
 ]
 build: [

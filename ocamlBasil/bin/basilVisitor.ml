@@ -13,8 +13,8 @@ open Visitor
 
 class type basilVisitor = object
   method vdecl : declaration -> declaration visitAction
-  method vprog : program -> program visitAction
-  method vproc : (bIdent * procDef) -> (bIdent * procDef) visitAction
+  method vprog : moduleT -> moduleT visitAction
+  method vproc : procDef -> procDef visitAction
   method vblock : block -> block visitAction
   method vstmt : statement -> statement visitAction
   method vjump : jump -> jump visitAction
@@ -39,53 +39,55 @@ let singletonVisitAction (a : 'a visitAction) : 'a list visitAction =
 
 let nochildren x y = y
 
-(** a base class for treeVisitors transforming the AST.
-    the method visit_stmts is left abstract for subclasses
-    to implement. *)
+(** a base class for treeVisitors transforming the AST. the method
+    visit_stmts is left abstract for subclasses to implement. *)
 class virtual basilTreeVisitor (vis : #basilVisitor) =
   object (self)
-    method visit_prog (p : program) : program =
+    method visit_prog (p : moduleT) : moduleT =
       let next _ p =
-        match p with Prog decls -> Prog (mapNoCopy self#visit_decl decls)
+        match p with
+        | Module1 decls -> Module1 (mapNoCopy self#visit_decl decls)
       in
       doVisit vis (vis#vprog p) next p
 
-    method visit_procdef (p : (bIdent * procDef)) : (bIdent * procDef) =
+    method visit_procdef (p : procDef) : procDef =
       let ndef v def =
-        let (ident, def) =  def in
         match def with
-        | PD (beginning, procname, addrdecl, entryblock, internalBlocks, ending) ->
-            let entry = entryblock in
-            let bodyBlocks =
-              match internalBlocks with
-              | BSome (b, bl, e) -> BSome (b, (mapNoCopy self#visit_block bl), e)
-              | BNone -> BNone
-            in
-            (ident , PD (beginning, procname, addrdecl, entry,  bodyBlocks, ending))
+        | ProcedureDecl specList as decl -> decl
+        | ProcedureDef (specList, b, blocks, e) ->
+            let blocks = mapNoCopy self#visit_block blocks in
+            ProcedureDef (specList, b, blocks, e)
       in
       doVisit vis (vis#vproc p) ndef p
 
     method visit_decl (p : declaration) : declaration =
       let next _ p =
         match p with
-        | LetDecl _ -> p
-        | MemDecl _ -> p
+        | AxiomDecl _ -> p
+        | ProgDecl _ -> p
+        | ProgDeclWithSpec _ -> p
+        | SharedMemDecl _ -> p
+        | UnsharedMemDecl _ -> p
         | VarDecl _ -> p
-        | Procedure (id, inparams, outparams, def) ->
-            let (_, ndef) = self#visit_procdef (id, def) in
-            Procedure (id, inparams, outparams, ndef)
+        | UninterpFunDecl _ -> p
+        | FunDef _ -> p
+        | Procedure (procSig, attrs, def) ->
+            let ndef = self#visit_procdef def in
+            Procedure (procSig, attrs, ndef)
       in
       doVisit vis (vis#vdecl p) next p
 
     method visit_block (b : block) : block =
       let next _ b =
         match b with
-        | B (bg, label, addr, stmts, j, ed) ->
-            B
-              (bg, label,
+        | Block1 (bg, label, addr, stmts, j, ed) ->
+            Block1
+              ( bg,
+                label,
                 addr,
                 mapNoCopy self#visit_statement stmts,
-                self#visit_jump j , ed)
+                self#visit_jump j,
+                ed )
       in
       doVisit vis (vis#vblock b) next b
 
@@ -102,8 +104,8 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
 class nopBasilVisitor : basilVisitor =
   object
     method vdecl (_ : declaration) = DoChildren
-    method vprog (_ : program) = DoChildren
-    method vproc (_ : bIdent * procDef) = DoChildren
+    method vprog (_ : moduleT) = DoChildren
+    method vproc (_ : procDef) = DoChildren
     method vblock (_ : block) = DoChildren
     method vstmt (_ : statement) = DoChildren
     method vjump (_ : jump) = DoChildren
@@ -115,7 +117,7 @@ class forwardBasilvisitor (vis : #basilVisitor) =
     inherit basilTreeVisitor vis
   end
 
-let visit_prog (vis : #basilVisitor) (p : program) =
+let visit_prog (vis : #basilVisitor) (p : moduleT) =
   (new forwardBasilvisitor vis)#visit_prog p
 
 let visit_block (vis : #basilVisitor) (p : block) =

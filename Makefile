@@ -20,7 +20,7 @@ cpp/TestBasilIR: BasilIR.cf
 	$(MAKE) -C cpp
 
 runcpp: cpp/TestBasilIR FORCE
-	./cpp/TestBasilIR ../../../test-output.il
+	./cpp/TestBasilIR ../basilite/cntlm-output.il
 
 test : ./cpp/TestBasilIR desugar.cpp test.cpp
 	g++ -O2 -g test.cpp desugar.cpp  cpp/Skeleton.C cpp/Absyn.o cpp/Buffer.o cpp/Lexer.o cpp/Parser.o cpp/Printer.o -o test
@@ -31,5 +31,9 @@ c/Absyn.c : BasilIR.cf
 tex/BasilIR.pdf: BasilIR.cf
 		bnfc --latex -m -o tex BasilIR.cf
 		$(MAKE) -C tex
+
+
+pyg: BasilIR.cf
+		bnfc --pygments -o pygments BasilIR.cf
 
 FORCE: ;
