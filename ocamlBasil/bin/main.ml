@@ -52,11 +52,6 @@ module LineCol = struct
   let to_position p =
     Linol_lwt.Position.create ~line:(fst p) ~character:(snd p)
 
-  let relative_to i j =
-    let l_i, p_i = i in
-    let l_j, p_j = j in
-    if l_i = l_j then (0, p_j - p_i) else (l_j - l_i, p_j)
-
   let range (b : t) (e : t) =
     Linol_lwt.Range.create ~start:(to_position b) ~end_:(to_position e)
 end
@@ -79,8 +74,6 @@ module Token = struct
     Linol_lwt.Range.create
       ~start:(LineCol.to_position (begin_linecol t))
       ~end_:(LineCol.to_position (end_linecol t))
-
-  let relative_to i j = (LineCol.relative_to (fst i) (fst j), snd j)
 end
 
 module TokenMap = struct
@@ -155,16 +148,9 @@ let find_token_opt (tokens : 'a TokenMap.t) (pos : LineCol.t) : 'a option =
       Some r
   | _ -> None
 
-module Processor = struct
-  open BasilIR.AbsBasilIR
-
-  type symbs = {
-    proc_defs : def_info StringMap.t;
-    proc_children : string list StringMap.t;
-    block_defs : def_info StringMap.t;
-    proc_refs : string TokenMap.t;
-    block_refs : string TokenMap.t;
-  }
+module SemanticTokensProcessor = struct
+  type token_info = { token_type : string; token_modifiers : string list }
+  type t = token_info TokenMap.t
 
   (* dealing with int-indexed tokens *)
   let token_mod = [ "declaration"; "definition" ]
@@ -179,12 +165,12 @@ module Processor = struct
     let m = to_index token_typ in
     fun i -> StringMap.find i m
 
-  let stoken_legend =
-    Linol_lwt.SemanticTokensLegend.create ~tokenModifiers:token_mod
-      ~tokenTypes:token_typ
-
   (*TODO: probably want to implement ranges for efficiency*)
   let semantic_tokens_config =
+    let stoken_legend =
+      Linol_lwt.SemanticTokensLegend.create ~tokenModifiers:token_mod
+        ~tokenTypes:token_typ
+    in
     Linol_lwt.SemanticTokensRegistrationOptions.create
       ~full:
         (`Full
@@ -194,50 +180,40 @@ module Processor = struct
 
   type abs_token = { tok : Token.t; typ : int; modifier : int list }
 
-  let abs_token_to_array i =
+  let token_to_array (tok : Token.t) (tok_info : token_info) =
     (* https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens *)
-    let { tok; typ; modifier } = i in
+    let { token_type; token_modifiers } = tok_info in
     let line, character = fst tok in
     let length = snd tok in
-    let token_type = typ in
-    let mods =
-      List.map (fun i -> Int.shift_left 1 i) modifier
+    let token_modifiers = List.map get_token_mod token_mod in
+    let token_type = get_token_typ token_type in
+    let modifier_bitset =
+      List.map (fun i -> Int.shift_left 1 i) token_modifiers
       |> List.fold_left Int.logor 0
     in
-    [| line; character; length; token_type; mods |]
+    [| line; character; length; token_type; modifier_bitset |]
 
-  let to_semantic_highlight_data (s : symbs) =
-    let abs_toks =
-      List.map
-        (fun (_, di) ->
-          {
-            tok = di.label_tok;
-            typ = get_token_typ "class";
-            modifier = [ get_token_mod "definition" ];
-          })
-        (StringMap.to_list s.proc_defs)
-      @ List.map
-          (fun (_, di) ->
-            {
-              tok = di.label_tok;
-              typ = get_token_typ "method";
-              modifier = [ get_token_mod "definition" ];
-            })
-          (StringMap.to_list s.block_defs)
-      @ List.map
-          (fun (t, _) ->
-            { tok = t; typ = get_token_typ "method"; modifier = [] })
-          (TokenMap.to_list s.block_refs)
-      @ List.map
-          (fun (t, _) ->
-            { tok = t; typ = get_token_typ "class"; modifier = [] })
-          (TokenMap.to_list s.proc_refs)
-    in
+  let empty = TokenMap.empty
+
+  let add xs (e : 'a -> Token.t * token_info) tm =
+    Seq.map e xs |> fun x -> TokenMap.add_seq x tm
+
+  let add_tokmap (xs : 'a TokenMap.t) (e : token_info) tm =
+    let ns = TokenMap.map (fun _ -> e) xs in
+    TokenMap.union (fun i a b -> Some a) tm ns
+
+  let linecol_relative_to (i : LineCol.t) (j : LineCol.t) =
+    let l_i, p_i = i in
+    let l_j, p_j = j in
+    if l_i = l_j then (0, p_j - p_i) else (l_j - l_i, p_j)
+
+  let token_relative_to (i : Token.t) (j : Token.t) =
+    (linecol_relative_to (fst i) (fst j), snd j)
+
+  let to_semantic_tokens_full (tokens : t) =
     (*NOTE: assuming non-overlapping without checking: grammar shouldn't
       allow *)
-    let sorted =
-      abs_toks |> List.sort (fun a b -> Token.compare a.tok b.tok)
-    in
+    let sorted = TokenMap.to_list tokens in
     let relative =
       match sorted with
       | [] -> []
@@ -245,15 +221,49 @@ module Processor = struct
       | hd :: tl ->
           let _, nl =
             List.fold_left_map
-              (fun ptok v ->
-                let nt = Token.relative_to ptok v.tok in
-                (v.tok, { v with tok = nt }))
-              hd.tok tl
+              (fun ptok (tok, ti) ->
+                let nt = token_relative_to ptok tok in
+                (tok, (nt, ti)))
+              (fst hd) tl
           in
           hd :: nl
     in
-    let data = List.map abs_token_to_array relative |> Array.concat in
+    let data =
+      List.map (fun (t, i) -> token_to_array t i) relative |> Array.concat
+    in
     Linol_lwt.SemanticTokens.create ~data ()
+end
+
+module Processor = struct
+  open BasilIR.AbsBasilIR
+
+  type symbs = {
+    proc_defs : def_info StringMap.t;
+    proc_children : string list StringMap.t;
+    block_defs : def_info StringMap.t;
+    proc_refs : string TokenMap.t;
+    block_refs : string TokenMap.t;
+  }
+
+  let to_semantic_highlight_data (s : symbs) =
+    let toks =
+      SemanticTokensProcessor.empty
+      |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
+           (fun (_, di) ->
+             ( di.label_tok,
+               { token_type = "class"; token_modifiers = [ "definition" ] }
+             ))
+      |> SemanticTokensProcessor.add (StringMap.to_rev_seq s.block_defs)
+           (fun (_, di) ->
+             ( di.label_tok,
+               { token_type = "method"; token_modifiers = [ "definition" ] }
+             ))
+      |> SemanticTokensProcessor.add_tokmap s.block_refs
+           { token_type = "method"; token_modifiers = [] }
+      |> SemanticTokensProcessor.add_tokmap s.proc_refs
+           { token_type = "class"; token_modifiers = [] }
+    in
+    SemanticTokensProcessor.to_semantic_tokens_full toks
 
   let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
@@ -568,7 +578,7 @@ class lsp_server =
         semanticTokensProvider =
           Some
             (`SemanticTokensRegistrationOptions
-               Processor.semantic_tokens_config);
+               SemanticTokensProcessor.semantic_tokens_config);
       }
 
     method on_request_unhandled : type r.
