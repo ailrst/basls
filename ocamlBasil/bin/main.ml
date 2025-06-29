@@ -52,6 +52,11 @@ module LineCol = struct
   let to_position p =
     Linol_lwt.Position.create ~line:(fst p) ~character:(snd p)
 
+  let relative_to i j =
+    let l_i, p_i = i in
+    let l_j, p_j = j in
+    if l_i = l_j then (0, p_j - p_i) else (l_j - l_i, p_j)
+
   let range (b : t) (e : t) =
     Linol_lwt.Range.create ~start:(to_position b) ~end_:(to_position e)
 end
@@ -74,6 +79,8 @@ module Token = struct
     Linol_lwt.Range.create
       ~start:(LineCol.to_position (begin_linecol t))
       ~end_:(LineCol.to_position (end_linecol t))
+
+  let relative_to i j = (LineCol.relative_to (fst i) (fst j), snd j)
 end
 
 module TokenMap = struct
@@ -158,6 +165,95 @@ module Processor = struct
     proc_refs : string TokenMap.t;
     block_refs : string TokenMap.t;
   }
+
+  (* dealing with int-indexed tokens *)
+  let token_mod = [ "declaration"; "definition" ]
+  let token_typ = [ "class"; "method"; "function" ]
+  let to_index m = List.mapi (fun i v -> (v, i)) m |> StringMap.of_list
+
+  let get_token_mod : string -> int =
+    let m = to_index token_mod in
+    fun i -> StringMap.find i m
+
+  let get_token_typ : string -> int =
+    let m = to_index token_typ in
+    fun i -> StringMap.find i m
+
+  let stoken_legend =
+    Linol_lwt.SemanticTokensLegend.create ~tokenModifiers:token_mod
+      ~tokenTypes:token_typ
+
+  (*TODO: probably want to implement ranges for efficiency*)
+  let semantic_tokens_config =
+    Linol_lwt.SemanticTokensRegistrationOptions.create
+      ~full:
+        (`Full
+           (Linol_lwt.SemanticTokensRegistrationOptions.create_full
+              ~delta:false ()))
+      ~legend:stoken_legend ()
+
+  type abs_token = { tok : Token.t; typ : int; modifier : int list }
+
+  let abs_token_to_array i =
+    (* https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens *)
+    let { tok; typ; modifier } = i in
+    let line, character = fst tok in
+    let length = snd tok in
+    let token_type = typ in
+    let mods =
+      List.map (fun i -> Int.shift_left 1 i) modifier
+      |> List.fold_left Int.logor 0
+    in
+    [| line; character; length; token_type; mods |]
+
+  let to_semantic_highlight_data (s : symbs) =
+    let abs_toks =
+      List.map
+        (fun (_, di) ->
+          {
+            tok = di.label_tok;
+            typ = get_token_typ "class";
+            modifier = [ get_token_mod "definition" ];
+          })
+        (StringMap.to_list s.proc_defs)
+      @ List.map
+          (fun (_, di) ->
+            {
+              tok = di.label_tok;
+              typ = get_token_typ "method";
+              modifier = [ get_token_mod "definition" ];
+            })
+          (StringMap.to_list s.block_defs)
+      @ List.map
+          (fun (t, _) ->
+            { tok = t; typ = get_token_typ "method"; modifier = [] })
+          (TokenMap.to_list s.block_refs)
+      @ List.map
+          (fun (t, _) ->
+            { tok = t; typ = get_token_typ "class"; modifier = [] })
+          (TokenMap.to_list s.proc_refs)
+    in
+    (*NOTE: assuming non-overlapping without checking: grammar shouldn't
+      allow *)
+    let sorted =
+      abs_toks |> List.sort (fun a b -> Token.compare a.tok b.tok)
+    in
+    let relative =
+      match sorted with
+      | [] -> []
+      | hd :: [] -> [ hd ]
+      | hd :: tl ->
+          let _, nl =
+            List.fold_left_map
+              (fun ptok v ->
+                let nt = Token.relative_to ptok v.tok in
+                (v.tok, { v with tok = nt }))
+              hd.tok tl
+          in
+          hd :: nl
+    in
+    let data = List.map abs_token_to_array relative |> Array.concat in
+    Linol_lwt.SemanticTokens.create ~data ()
 
   let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
@@ -464,10 +560,35 @@ class lsp_server =
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
+
+    method config_modify_capabilities (c : ServerCapabilities.t) :
+        ServerCapabilities.t =
+      {
+        c with
+        semanticTokensProvider =
+          Some
+            (`SemanticTokensRegistrationOptions
+               Processor.semantic_tokens_config);
+      }
+
+    method on_request_unhandled : type r.
+        notify_back:Linol_lwt.Jsonrpc2.notify_back ->
+        id:Linol_lwt.Jsonrpc2.Req_id.t ->
+        r Linol.Lsp.Client_request.t ->
+        r Linol_lwt.Jsonrpc2.IO.t =
+      fun ~notify_back:(_ : Linol_lwt.Jsonrpc2.notify_back) ~id:_ _r ->
+        match _r with
+        | Linol_lsp.Client_request.SemanticTokensFull
+            { partialResultToken; textDocument; workDoneToken } ->
+            let uri = textDocument.uri in
+            (match (Hashtbl.find buffers uri).ast with
+            | Ast (p, syms) -> Some syms
+            | _ -> None)
+            |> Option.map (fun s -> Processor.to_semantic_highlight_data s)
+            |> fun i -> Lwt.return i
+        | _ -> failwith "TODO: handle this\n       request"
   end
 
-(* Main code This is the code that creates an instance of the lsp server
-   class and runs it as a task. *)
 let run () =
   log "start";
   let s = new lsp_server in
