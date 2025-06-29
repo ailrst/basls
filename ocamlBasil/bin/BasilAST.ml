@@ -602,10 +602,10 @@ module BasilASTLoader = struct
 
   and unsafe_unsigil g : ident =
     match g with
-    | `Global (GlobalIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
+    | `Global (GlobalIdent (pos, g)) -> g
     | `Local (LocalIdent (pos, g)) -> g
-    | `Proc (ProcIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
-    | `Block (BlockIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
+    | `Proc (ProcIdent (pos, g)) -> g
+    | `Block (BlockIdent (pos, g)) -> g
 
   and transExpr (x : BasilIR.AbsBasilIR.expr) : BasilAST.expr =
     match x with

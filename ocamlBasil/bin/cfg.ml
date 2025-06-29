@@ -128,6 +128,7 @@ module GG =
 
 module Dot = Graph.Graphviz.Dot (struct
   include G
+  include Graph.Pack
 
   let safe_label s =
     "\\l"
@@ -154,3 +155,20 @@ let output_dot fname p =
   let f = open_out fname in
   Dot.output_graph f p.graph;
   close_out f
+
+let viewer_cmd =
+  Sys.getenv_opt "GRAPHVIEWER" |> function Some x -> x | None -> "xdg-open"
+
+let viewer_fmt =
+  Sys.getenv_opt "GRAPHFORMAT" |> function Some x -> x | None -> "svg"
+
+let display_with_viewer g =
+  let tmp = Filename.temp_file "graph" ".dot" in
+  let suf = "." ^ viewer_fmt in
+  let tmpo = Filename.temp_file "graph-o" suf in
+  let oc = open_out tmp in
+  output_dot tmp g;
+  close_out oc;
+  ignore (Sys.command ("dot -Tsvg " ^ tmp ^ " > " ^ tmpo));
+  ignore (Sys.command (viewer_cmd ^ " " ^ tmpo));
+  Sys.remove tmp

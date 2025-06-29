@@ -459,6 +459,7 @@ type state_after_processing = {
   linebreaks : linebreaks;
   ast : doc_ast;
   procs : BasilAST.BasilAST.proc list;
+  graphs : (unit -> Cfg.procedure_rec) StringMap.t;
 }
 
 let process (s : string) : state_after_processing =
@@ -480,8 +481,15 @@ let process (s : string) : state_after_processing =
         Option.iter Printexc.print_backtrace oc;
         []
     in
+    let graphs =
+      List.map
+        (fun (proc : BasilAST.BasilAST.proc) ->
+          (proc.label, fun () -> Cfg.graph_of_proc proc))
+        procs
+      |> StringMap.of_list
+    in
     (*Processor.print_syms syms; *)
-    { linebreaks; ast = Ast (prog, syms); procs }
+    { linebreaks; ast = Ast (prog, syms); procs; graphs }
   with ParBasilIR.Error ->
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
@@ -489,6 +497,7 @@ let process (s : string) : state_after_processing =
       linebreaks;
       ast = SyntaxError (lexeme lexbuf, start_pos, end_pos);
       procs = [];
+      graphs = StringMap.empty;
     }
 
 let process_some_input_file (_file_contents : string) :
@@ -522,6 +531,9 @@ class lsp_server =
     method spawn_query_handler f = Linol_lwt.spawn f
     method! config_definition = Some (`Bool true)
 
+    method! config_code_lens_options =
+      Some (Linol_lsp.Lsp.Types.CodeLensOptions.create ())
+
     method! config_symbol =
       Some
         (`DocumentSymbolOptions
@@ -549,6 +561,54 @@ class lsp_server =
     method on_req_hover ~notify_back ~id ~uri ~pos ~workDoneToken
         (d : Linol_lwt.doc_state) =
       Lwt.return None
+
+    method! on_req_code_lens_resolve ~notify_back ~id code_lens =
+      (* our code lenses are cheap so probably fine to resolve in one
+         stage *)
+      Lwt.return code_lens
+
+    method! config_list_commands = [ "show_cfg" ]
+
+    method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
+      log "lsjdlajda";
+      let proc =
+        (match args with
+        | Some [ uri; `String proc ] ->
+            log (Printf.sprintf "%s" (Yojson.Safe.to_string uri));
+            Some (Linol_lsp.Uri0.t_of_yojson uri, proc)
+        | _ -> None)
+        |> Option.map (fun (uri, proc_label) ->
+               let state = Hashtbl.find buffers uri in
+               let pg = StringMap.find proc_label state.graphs in
+               let g = pg () in
+               Cfg.display_with_viewer g)
+      in
+      Lwt.return (`String "ok")
+
+    method! on_req_code_lens ~notify_back ~id ~uri ~workDoneToken
+        ~partialResultToken ds =
+      let state = Hashtbl.find buffers uri in
+      let p =
+        state.procs
+        |> List.map (fun (p : BasilAST.BasilAST.proc) ->
+               let b, e = p.label_lexical_range |> Option.get in
+               let range =
+                 token_of_char_range state.linebreaks b e |> Token.to_range
+               in
+               let command : Linol_lsp.Types.Command.t =
+                 {
+                   arguments =
+                     Some [ Linol_lsp.Uri0.yojson_of_t uri; `String p.label ];
+                   command = "show_cfg";
+                   title = "Show CFG";
+                 }
+               in
+               let codelens =
+                 Linol_lsp.Types.CodeLens.create ~command ~range ()
+               in
+               codelens)
+      in
+      Lwt.return p
 
     (* `Location of Location.t list *)
     method on_req_definition ~notify_back ~id ~uri ~pos ~workDoneToken
