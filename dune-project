@@ -23,6 +23,8 @@
           zarith
           ocamlgraph
           hashcons
+          containers
+          ppx_deriving
           (linol (="0.10")) 
           (linol-lwt (="0.10")) 
           (lsp (>="1.22.0")) 

@@ -4,7 +4,6 @@ open Loader
 open BasilVisitor
 open Lwt.Infix
 open Lsp.Types
-open Analysis
 open BasilIR
 module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)

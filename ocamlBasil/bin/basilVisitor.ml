@@ -96,7 +96,15 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_statement (s : statement) : statement =
       let next _ b =
         match b with
-        | Assign (o, expr) -> Assign (self#visit_lvar o, self#visit_expr expr)
+        | Assign (Assignment1 (o, expr)) ->
+            Assign (Assignment1 (self#visit_lvar o, self#visit_expr expr))
+        | SimulAssign alist ->
+            SimulAssign
+              (List.map
+                 (function
+                   | Assignment1 (o, expr) ->
+                       Assignment1 (self#visit_lvar o, self#visit_expr expr))
+                 alist)
         | SLoad (lVar, endian, memory, addr, size) ->
             let nlv = self#visit_lvar lVar in
             let nadr = self#visit_expr addr in
@@ -117,12 +125,15 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | IndirectCall expr ->
             let ne = self#visit_expr expr in
             if ne <> expr then IndirectCall ne else b
-        | Assume expr ->
+        | Assume (expr, attr) ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Assume ne else b
-        | Assert expr ->
+            if ne <> expr then Assume (ne, attr) else b
+        | Guard (expr, attr) ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Assert ne else b
+            if ne <> expr then Guard (ne, attr) else b
+        | Assert (expr, attr) ->
+            let ne = self#visit_expr expr in
+            if ne <> expr then Assert (ne, attr) else b
       in
       doVisit vis (vis#vstmt s) next s
 
@@ -139,7 +150,8 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_expr (e : expr) =
       let next _ e =
         match e with
-        | RVar (bIdent, typeT) -> e
+        | GRVar rvar -> e
+        | LRVar rvar -> e
         | BinaryExpr (binOp, l, r) ->
             let nl = self#visit_expr l in
             let nr = self#visit_expr r in
@@ -160,10 +172,13 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
             let nl = self#visit_expr l in
             let nr = self#visit_expr r in
             if nl <> l || nr <> r then Concat (nl, nr) else e
-        | BVLiteral (intVal, bVType) -> e
-        | IntLiteral intVal -> e
-        | TrueLiteral -> e
-        | FalseLiteral -> e
+        | Literal l -> Literal l
+        | Forall l -> Forall l
+        | Exists l -> Exists l
+        | OldExpr e -> OldExpr (self#visit_expr e)
+        | FunctionOp (i, param) ->
+            let param = mapNoCopy self#visit_expr param in
+            FunctionOp (i, param)
       in
       doVisit vis (vis#vexpr e) next e
 

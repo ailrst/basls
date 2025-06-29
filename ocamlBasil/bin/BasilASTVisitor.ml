@@ -54,7 +54,13 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_statement (s : statement) : statement =
       let next _ b =
         match b with
-        | Assign (o, expr) -> Assign (self#visit_lvar o, self#visit_expr expr)
+        | Assign assigns ->
+            let assigns =
+              mapNoCopy
+                (function l, r -> (self#visit_lvar l, self#visit_expr r))
+                assigns
+            in
+            Assign assigns
         | Load (lVar, endian, memory, addr, size) ->
             let nlv = self#visit_lvar lVar in
             let nadr = self#visit_expr addr in
@@ -141,7 +147,6 @@ class nopBasilVisitor : basilVisitor =
     method vexpr (_ : expr) = DoChildren
     method vlvar (_ : lVar) = DoChildren
   end
-
 
 class reverseBasilvisitor (vis : #basilVisitor) =
   object (self)

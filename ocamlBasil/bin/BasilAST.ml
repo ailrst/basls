@@ -56,13 +56,15 @@ module BasilAST = struct
   let show_ident (i : ident) : string = i
   let pp_ident fmt i = Format.pp_print_string fmt (show_ident i)
 
-  type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG
+  type unOp = BOOLNOT | INTNEG | BVNOT | BVNEG | BOOL2BV1
   [@@deriving show { with_path = false }, eq]
 
   let show_unOp x = String.lowercase_ascii (show_unOp x)
   let pp_unOp fmt x = Format.pp_print_string fmt (show_unOp x)
 
   type binOp =
+    | EQ
+    | NEQ
     | BVAND
     | BVOR
     | BVADD
@@ -89,21 +91,15 @@ module BasilAST = struct
     | BVSLE
     | BVSGT
     | BVSGE
-    | BVEQ
-    | BVNEQ
     | INTADD
     | INTMUL
     | INTSUB
     | INTDIV
     | INTMOD
-    | INTEQ
-    | INTNEQ
     | INTLT
     | INTLE
     | INTGT
     | INTGE
-    | BOOLEQ
-    | BOOLNEQ
     | BOOLAND
     | BOOLOR
     | BOOLIMPLIES
@@ -112,10 +108,10 @@ module BasilAST = struct
   let binop_is_int = function
     | INTADD | INTMUL | INTSUB | INTDIV | INTMOD -> true
     | BOOLIMPLIES | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT
-    | BVSGE | INTLT | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND
-    | BOOLOR | BVEQ | BVNEQ | BVAND | BVOR | BVADD | BVMUL | BVUDIV | BVUREM
-    | BVSHL | BVLSHR | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB
-    | BVSDIV | BVSREM | BVSMOD | BVASHR | INTEQ | INTNEQ ->
+    | BVSGE | INTLT | INTLE | INTGT | INTGE | BOOLAND | BOOLOR | BVAND | BVOR
+    | BVADD | BVMUL | BVUDIV | BVUREM | BVSHL | BVLSHR | BVNAND | BVNOR
+    | BVXOR | BVXNOR | BVCOMP | BVSUB | BVSDIV | BVSREM | BVSMOD | BVASHR
+    | EQ | NEQ ->
         false
 
   let binop_is_bv = function
@@ -123,16 +119,14 @@ module BasilAST = struct
     | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB | BVSDIV | BVSREM
     | BVSMOD | BVASHR ->
         true
-    | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT | BVSGE | BVEQ
-    | BVNEQ | INTADD | INTMUL | INTSUB | INTDIV | INTMOD | INTEQ | INTNEQ
-    | INTLT | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND | BOOLOR
-    | BOOLIMPLIES ->
+    | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT | BVSGE | INTADD
+    | INTMUL | INTSUB | INTDIV | INTMOD | INTLT | INTLE | INTGT | INTGE
+    | BOOLAND | BOOLOR | BOOLIMPLIES | EQ | NEQ ->
         false
 
   let binop_is_pred = function
     | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT | BVSGE | INTLT
-    | INTLE | INTGT | INTGE | BOOLEQ | BOOLNEQ | BOOLAND | BOOLOR | BVEQ
-    | BVNEQ | INTEQ | INTNEQ | BOOLIMPLIES ->
+    | INTLE | INTGT | INTGE | BOOLAND | BOOLOR | EQ | NEQ | BOOLIMPLIES ->
         true
     | BVAND | BVOR | BVADD | BVMUL | BVUDIV | BVUREM | BVSHL | BVLSHR
     | BVNAND | BVNOR | BVXOR | BVXNOR | BVCOMP | BVSUB | BVSDIV | BVSREM
@@ -141,14 +135,12 @@ module BasilAST = struct
 
   let bool_expr =
     [
-      INTEQ;
-      INTNEQ;
+      EQ;
+      NEQ;
       INTLT;
       INTLE;
       INTGT;
       INTGE;
-      BOOLEQ;
-      BOOLNEQ;
       BOOLAND;
       BOOLOR;
       BOOLIMPLIES;
@@ -160,8 +152,6 @@ module BasilAST = struct
       BVSLE;
       BVSGT;
       BVSGE;
-      BVEQ;
-      BVNEQ;
     ]
 
   let show_binOp x = String.lowercase_ascii (show_binOp x)
@@ -185,10 +175,9 @@ module BasilAST = struct
   let expr_tag e = e.tag
 
   let rec expr_type e =
-    (* This is inefficient, (but could be efficiently memoised with hash consing)
-      We store just enough information to reconstruct the type locally; only atom exprs 
-      (rvars and constants) store their type 
-    *)
+    (* This is inefficient, (but could be efficiently memoised with hash
+       consing) We store just enough information to reconstruct the type
+       locally; only atom exprs (rvars and constants) store their type *)
     match expr_view e with
     | RVar (_, t, _) -> t
     | BinaryExpr (o, l, r) when binop_is_int o -> Integer
@@ -280,9 +269,9 @@ module BasilAST = struct
     | UnaryExpr (op, e2) ->
         Printf.sprintf "%s(%s)" (show_unOp op) (show_expr e2)
     | ZeroExtend (sz, e) ->
-        Printf.sprintf "zero_extend(%d, %s)" (sz) (show_expr e)
+        Printf.sprintf "zero_extend(%d, %s)" sz (show_expr e)
     | SignExtend (sz, e) ->
-        Printf.sprintf "sign_extend(%d, %s)" (sz) (show_expr e)
+        Printf.sprintf "sign_extend(%d, %s)" sz (show_expr e)
     | Extract (hi, lo, e) ->
         Printf.sprintf "bvextract(%s, %s, %s)" (show_integer hi)
           (show_integer lo) (show_expr e)
@@ -320,7 +309,7 @@ module BasilAST = struct
   let boolconst b = cons (BoolConst b)
 
   type statement =
-    | Assign of lVar * expr
+    | Assign of (lVar * expr) list
     | Load of lVar * endian * ident * expr * integer
     | Store of endian * ident * expr * expr * integer
     | DirectCall of lVar list * ident * expr list
@@ -332,7 +321,11 @@ module BasilAST = struct
   let string_of_endian = function LittleEndian -> "le" | BigEndian -> "be"
 
   let show_statement = function
-    | Assign (v, e) -> Printf.sprintf "%s := %s" (show_lVar v) (show_expr e)
+    | Assign assigns ->
+        assigns
+        |> List.map (fun (v, e) ->
+               Printf.sprintf "%s := %s" (show_lVar v) (show_expr e))
+        |> String.concat " | "
     | Load (lv, endian, mem, addr, sz) ->
         Printf.sprintf "%s := load %s %s %s %s" (show_lVar lv)
           (string_of_endian endian) mem (show_expr addr) (show_integer sz)
@@ -379,9 +372,6 @@ module BasilASTLoader = struct
   open BasilAST
 
   let oc = open_out "logger1"
-
-  type result = string
-
   let failure x = failwith "Undefined case." (* x discarded *)
 
   let rec transBVTYPE (x : bVTYPE) : BasilAST.btype =
@@ -400,39 +390,48 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> unquote string
 
-  and transProgram (x : program) : proc list =
+  and transProgram (x : moduleT) : proc list =
     match x with
-    | Prog declarations -> List.concat_map transDeclaration declarations
+    | Module1 declarations -> List.concat_map transDeclaration declarations
 
   and transDeclaration (x : declaration) : proc list =
     match x with
-    | LetDecl (bident, mexpr) -> []
-    | MemDecl (bident, type') -> []
+    | SharedMemDecl (bident, type') -> []
+    | UnsharedMemDecl (bident, type') -> []
     | VarDecl (bident, type') -> []
+    | UninterpFunDecl (attrDefList, glident, argtypes, rettype) -> []
+    | FunDef (attrList, glident, params, rt, body) -> []
+    | AxiomDecl _ -> []
+    | ProgDecl _ -> []
+    | ProgDeclWithSpec _ -> []
     | Procedure
-        ( bident,
-          paramss0,
-          paramss,
-          PD (beginrec, str, paddress, pentry, internalblocks, endrec) ) ->
-        let tr = Some (match bident with BIdent (tr, _) -> tr) in
-        let id = transBIdent bident in
-        let iblocks, blockrange = transInternalBlocks internalblocks in
+        ( ProcedureSig (id, in_params, out_params),
+          attrs,
+          ProcedureDecl spec_list ) ->
+        []
+    | Procedure
+        ( ProcedureSig (ProcIdent (id_pos, id), in_params, out_params),
+          attrs,
+          ProcedureDef (spec_list, bl, blocks, el) ) ->
+        let internal_blocks = List.map transBlock blocks in
+        let entry =
+          match internal_blocks with h :: tl -> Some h.label | _ -> None
+        in
         [
           {
             label = id;
-            label_lexical_range = tr;
-            formal_in_params = List.map transParams paramss0;
-            formal_out_params = List.map transParams paramss;
-            addr = transPAddress paddress;
-            entry = transPEntry pentry;
-            internal_blocks = iblocks;
-            blocklist_lexical_range = blockrange;
+            label_lexical_range = Some id_pos;
+            formal_in_params = List.map transParams in_params;
+            formal_out_params = List.map transParams out_params;
+            addr = None;
+            entry;
+            internal_blocks;
+            blocklist_lexical_range = None;
           };
         ]
 
   and transMapType (x : mapType) : btype =
-    match x with
-    | MapT (t0, beginlist, t1, endlist) -> Map (transType t0, transType t1)
+    match x with MapT (t0, t1) -> Map (transType t0, transType t1)
 
   and transType (x : typeT) : btype =
     match x with
@@ -444,13 +443,7 @@ module BasilASTLoader = struct
   and transIntVal (x : intVal) : integer =
     match x with
     | HexInt (IntegerHex ihex) -> Z.of_string ihex
-    | DecInt i -> Z.of_int i
-
-  and transAddrAttr (x : addrAttr) : integer option =
-    match x with
-    | AddrAttrSome (beginrec, intval, endrec) -> Some (transIntVal intval)
-    | AddrAttrNone -> None
-    | AddrAttrEmpty (beginrec, endrec) -> None
+    | DecInt (IntegerDec i) -> Z.of_string i
 
   and transEndian (x : BasilIR.AbsBasilIR.endian) : BasilAST.endian =
     match x with LittleEndian -> LittleEndian | BigEndian -> BigEndian
@@ -458,54 +451,59 @@ module BasilASTLoader = struct
   and transStatement (x : BasilIR.AbsBasilIR.statement) : BasilAST.statement
       =
     match x with
-    | Assign (lvar, expr) -> Assign (transLVar lvar, transExpr expr)
+    | Assign (Assignment1 (lvar, expr)) ->
+        Assign [ (transLVar lvar, transExpr expr) ]
+    | SimulAssign assigns ->
+        Assign
+          (assigns
+          |> List.map (function Assignment1 (l, r) ->
+                 (transLVar l, transExpr r)))
     | SLoad (lvar, endian, bident, expr, intval) ->
         Load
           ( transLVar lvar,
             transEndian endian,
-            transBIdent bident,
+            unsafe_unsigil (`Global bident),
             transExpr expr,
             transIntVal intval )
     | SStore (endian, bident, expr0, expr, intval) ->
         Store
           ( transEndian endian,
-            transBIdent bident,
+            unsafe_unsigil (`Global bident),
             transExpr expr0,
             transExpr expr,
             transIntVal intval )
     | DirectCall (calllvars, bident, exprs) ->
         DirectCall
           ( transCallLVars calllvars,
-            transBIdent bident,
+            unsafe_unsigil (`Proc bident),
             List.map transExpr exprs )
     | IndirectCall expr -> IndirectCall (transExpr expr)
-    | Assume expr -> Assume (transExpr expr)
-    | Assert expr -> Assert (transExpr expr)
+    | Assume (expr, _) -> Assume (transExpr expr)
+    | Guard (expr, _) -> Assume (transExpr expr)
+    | Assert (expr, _) -> Assert (transExpr expr)
 
   and transCallLVars (x : callLVars) : lVar list =
     match x with
     | NoOutParams -> []
     | LocalVars lvars ->
-        List.map
-          (function
-            | BasilIR.AbsBasilIR.GlobalLVar (i, t) ->
-                transLVar (BasilIR.AbsBasilIR.LVarDef (i, t))
-            | t -> transLVar t)
-          lvars
+        lvars
+        |> List.map (function LocalVar1 (i, t) ->
+               BasilAST.LVarDef (unsafe_unsigil (`Local i), transType t))
     | ListOutParams lvars -> List.map transLVar lvars
 
   and transJump (x : BasilIR.AbsBasilIR.jump) : jump =
     match x with
-    | GoTo bidents -> GoTo (List.map transBIdent bidents)
+    | GoTo bidents ->
+        GoTo (List.map (fun i -> unsafe_unsigil (`Block i)) bidents)
     | Unreachable -> Unreachable
     | Return exprs -> Return (List.map transExpr exprs)
 
   and transLVar (x : BasilIR.AbsBasilIR.lVar) : BasilAST.lVar =
     match x with
-    | LVarDef (bident, type') ->
-        BasilAST.LVarDef (transBIdent bident, transType type')
-    | GlobalLVar (bident, type') ->
-        BasilAST.GlobalLVar (transBIdent bident, transType type')
+    | LVarDef (LocalVar1 (bident, type')) ->
+        BasilAST.LVarDef (unsafe_unsigil (`Local bident), transType type')
+    | GlobalLVar (GlobalVar1 (bident, type')) ->
+        BasilAST.GlobalLVar (unsafe_unsigil (`Global bident), transType type')
 
   and list_begin_end_to_textrange beginlist endlist : textRange =
     let beg = match beginlist with BeginList ((i, j), l) -> i in
@@ -519,9 +517,13 @@ module BasilASTLoader = struct
 
   and transBlock (x : BasilIR.AbsBasilIR.block) : block =
     match x with
-    | B (bident, addrattr, beginlist, statements, jump, endlist) ->
-        let textrange = Some (match bident with BIdent (tr, _) -> tr) in
-        let name = transBIdent bident in
+    | Block1
+        ( BlockIdent (text_range, name),
+          addrattr,
+          beginlist,
+          statements,
+          jump,
+          endlist ) ->
         let begin_loc = fresh#get () in
         let end_loc = fresh#get () in
         {
@@ -529,58 +531,55 @@ module BasilASTLoader = struct
           begin_loc;
           end_loc;
           jump = transJump jump;
-          label_lexical_range = textrange;
-          addr = transAddrAttr addrattr;
+          label_lexical_range = Some text_range;
+          addr = None;
           stmts = List.mapi (fun i s -> transStatement s) statements;
           stmts_lexical_range = list_begin_end_to_textrange beginlist endlist;
         }
 
-  and transPEntry (x : pEntry) : string option =
-    match x with
-    | EntrySome block -> Some (transStr block)
-    | EntryNone -> None
-
-  and transPAddress (x : pAddress) : integer option =
-    match x with
-    | AddrSome intval -> Some (transIntVal intval)
-    | AddrNone -> None
-
-  and transInternalBlocks (x : internalBlocks) : block list * textRange =
-    match x with
-    | BSome (beginlist, blocks, endlist) ->
-        ( List.map transBlock blocks,
-          list_begin_end_to_textrange beginlist endlist )
-    | BNone -> ([], None)
-
   and param_to_lvar (pp : params) : BasilAST.lVar =
-    match pp with Param (id, t) -> LVarDef (transBIdent id, transType t)
+    match pp with
+    | Param (LocalIdent (pos, id), t) -> LVarDef (id, transType t)
 
   and transParams (x : params) : BasilAST.lVar = param_to_lvar x
 
+  and unsafe_unsigil g : ident =
+    match g with
+    | `Global (GlobalIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
+    | `Local (LocalIdent (pos, g)) -> g
+    | `Proc (ProcIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
+    | `Block (BlockIdent (pos, g)) -> String.sub g 1 (String.length g - 1)
+
   and transExpr (x : BasilIR.AbsBasilIR.expr) : BasilAST.expr =
     match x with
-    | RVar (bident, type') ->
-        rvar (transBIdent bident) ~typ:(transType type')
+    | GRVar (GlobalVar1 (g, type')) ->
+        rvar (unsafe_unsigil (`Global g)) ~typ:(transType type')
+    | LRVar (LocalVar1 (g, type')) ->
+        rvar (unsafe_unsigil (`Local g)) ~typ:(transType type')
     | BinaryExpr (binop, expr0, expr) ->
         binexp ~op:(transBinOp binop) (transExpr expr0) (transExpr expr)
     | UnaryExpr (unop, expr) -> unexp ~op:(transUnOp unop) (transExpr expr)
     | ZeroExtend (intval, expr) ->
-        zero_extend ~n_prefix_bits:(Z.to_int @@ transIntVal intval) (transExpr expr)
+        zero_extend
+          ~n_prefix_bits:(Z.to_int @@ transIntVal intval)
+          (transExpr expr)
     | SignExtend (intval, expr) ->
-        sign_extend ~n_prefix_bits:(Z.to_int @@ transIntVal intval) (transExpr expr)
+        sign_extend
+          ~n_prefix_bits:(Z.to_int @@ transIntVal intval)
+          (transExpr expr)
     | Extract (ival0, intval, expr) ->
         bvextract ~hi_incl:(transIntVal ival0) ~lo_excl:(transIntVal intval)
           (transExpr expr)
     | Concat (expr0, expr) -> bvconcat (transExpr expr0) (transExpr expr)
-    | BVLiteral (intval, BVT bvtype) ->
+    | Literal (BVLiteral (BV (intval, BVT bvtype))) ->
         bvconst
           ( (match transBVTYPE bvtype with
             | Bitvector i -> i
             | _ -> failwith "unreachable"),
             transIntVal intval )
-    | IntLiteral intval -> intconst (transIntVal intval)
-    | TrueLiteral -> boolconst true
-    | FalseLiteral -> boolconst false
+    | Literal (IntLiteral intval) -> intconst (transIntVal intval)
+    | Literal TrueLiteral -> boolconst true
+    | Literal FalseLiteral -> boolconst false
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) : BasilAST.binOp =
     match x with
@@ -591,12 +590,14 @@ module BasilASTLoader = struct
     | BinOpIntLogicalBinOp intlogicalbinop ->
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
+    | BinOpEqOp equop -> transEqOp equop
 
   and transUnOp (x : BasilIR.AbsBasilIR.unOp) : unOp =
     match x with
     | UnOpBVUnOp bvunop -> transBVUnOp bvunop
     | UnOp_boolnot -> BOOLNOT
     | UnOp_intneg -> INTNEG
+    | UnOp_booltobv1 -> BOOL2BV1
 
   and transBVUnOp (x : bVUnOp) : unOp =
     match x with BVUnOp_bvnot -> BVNOT | BVUnOp_bvneg -> BVNEG
@@ -611,7 +612,6 @@ module BasilASTLoader = struct
     | BVBinOp_bvurem -> BVUREM
     | BVBinOp_bvshl -> BVSHL
     | BVBinOp_bvlshr -> BVLSHR
-    | BVBinOp_bvult -> BVULT
     | BVBinOp_bvnand -> BVNAND
     | BVBinOp_bvnor -> BVNOR
     | BVBinOp_bvxor -> BVXOR
@@ -626,14 +626,16 @@ module BasilASTLoader = struct
   and transBVLogicalBinOp (x : bVLogicalBinOp) : binOp =
     match x with
     | BVLogicalBinOp_bvule -> BVULE
+    | BVLogicalBinOp_bvult -> BVULT
     | BVLogicalBinOp_bvugt -> BVUGT
     | BVLogicalBinOp_bvuge -> BVUGE
     | BVLogicalBinOp_bvslt -> BVSLT
     | BVLogicalBinOp_bvsle -> BVSLE
     | BVLogicalBinOp_bvsgt -> BVSGT
     | BVLogicalBinOp_bvsge -> BVSGE
-    | BVLogicalBinOp_bveq -> BVEQ
-    | BVLogicalBinOp_bvneq -> BVNEQ
+
+  and transEqOp (x : eqOp) : binOp =
+    match x with EqOp_eq -> EQ | EqOp_neq -> NEQ
 
   and transIntBinOp (x : intBinOp) : binOp =
     match x with
@@ -645,8 +647,6 @@ module BasilASTLoader = struct
 
   and transIntLogicalBinOp (x : intLogicalBinOp) : binOp =
     match x with
-    | IntLogicalBinOp_inteq -> INTEQ
-    | IntLogicalBinOp_intneq -> INTNEQ
     | IntLogicalBinOp_intlt -> INTLT
     | IntLogicalBinOp_intle -> INTLE
     | IntLogicalBinOp_intgt -> INTGT
@@ -654,10 +654,7 @@ module BasilASTLoader = struct
 
   and transBoolBinOp (x : boolBinOp) : binOp =
     match x with
-    | BoolBinOp_booleq -> BOOLEQ
-    | BoolBinOp_boolneq -> BOOLNEQ
     | BoolBinOp_booland -> BOOLAND
     | BoolBinOp_boolor -> BOOLOR
     | BoolBinOp_boolimplies -> BOOLIMPLIES
-    | BoolBinOp_boolequiv -> BOOLEQ
 end

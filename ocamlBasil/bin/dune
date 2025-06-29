@@ -1,7 +1,7 @@
 
 (library 
  (name loader)
- (modules visitor basilVisitor basilAST basilASTVisitor analysis cfg util)
+ (modules visitor basilVisitor basilAST basilASTVisitor cfg util)
 (libraries BasilIR
            hashcons
            ocamlgraph
