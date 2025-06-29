@@ -3,6 +3,9 @@ open Hashcons
 let combine acc n = (acc * 65599) + n
 let combine2 acc n1 n2 = combine (combine acc n1) n2
 
+let rec combinel acc n1 =
+  match n1 with [] -> acc | h :: tl -> combinel (combine acc h) tl
+
 let unquote s =
   if String.starts_with ~prefix:"\"" s && String.ends_with ~suffix:"\"" s
   then String.sub s 1 (String.length s - 2)
@@ -20,7 +23,12 @@ class fresh () =
 let fresh = new fresh ()
 
 module BasilAST = struct
-  type btype = Bitvector of int | Integer | Boolean | Map of btype * btype
+  type btype =
+    | Bitvector of int
+    | Integer
+    | Boolean
+    | Map of btype * btype
+    | Top
   [@@deriving eq]
 
   let rec show_btype = function
@@ -28,6 +36,7 @@ module BasilAST = struct
     | Integer -> "int"
     | Map (k, v) -> "map " ^ show_btype v ^ "[" ^ show_btype k ^ "]"
     | Boolean -> "bool"
+    | Top -> "(internal)top"
 
   type integer = Z.t
 
@@ -168,6 +177,10 @@ module BasilAST = struct
     | BVConst of bitvector
     | IntConst of integer
     | BoolConst of bool
+    | Old of expr
+    | Forall of (ident * btype) list * expr
+    | Exists of (ident * btype) list * expr
+    | ExprCall of ident * expr list * btype
 
   and expr = expr_node hash_consed
 
@@ -192,10 +205,15 @@ module BasilAST = struct
     | UnaryExpr (INTNEG, _) -> Integer
     | UnaryExpr (BVNEG, x) -> Bitvector (bv_width x)
     | UnaryExpr (BVNOT, x) -> Bitvector (bv_width x)
+    | UnaryExpr (BOOL2BV1, x) -> Bitvector 1
     | Concat (x, y) -> Bitvector (bv_width x + bv_width y)
     | ZeroExtend (sz, e) -> Bitvector (sz + bv_width e)
     | SignExtend (sz, e) -> Bitvector (sz + bv_width e)
     | Extract (hi, lo, _) -> Bitvector (Z.sub hi lo |> Z.to_int)
+    | Forall _ -> Boolean
+    | Exists _ -> Boolean
+    | Old x -> expr_type x
+    | ExprCall (_, _, t) -> t
 
   and bv_width (e : expr) =
     match expr_type e with
@@ -251,6 +269,11 @@ module BasilAST = struct
           combine (Hashtbl.hash (bv_size bv)) (Z.hash @@ bv_val bv)
       | IntConst i -> Hashtbl.hash i
       | BoolConst b -> Hashtbl.hash b
+      | Old b -> Hashtbl.hash b.tag
+      | Forall (params, b) -> Hashtbl.hash b.tag
+      | Exists (params, b) -> Hashtbl.hash b.tag
+      | ExprCall (id, params, rt) ->
+          combinel (Hashtbl.hash id) (List.map (fun i -> i.tag) params)
   end
 
   module H = Hashcons.Make (ExprHashable)
@@ -281,6 +304,28 @@ module BasilAST = struct
     | IntConst i -> show_integer i
     | BoolConst true -> "true"
     | BoolConst false -> "false"
+    | Forall (pl, b) ->
+        Printf.sprintf "forall (%s) :: %s"
+          (String.concat ", "
+             (List.map
+                (fun (i, t) ->
+                  Printf.sprintf "%s:%s" (show_ident i) (show_btype t))
+                pl))
+          (show_expr b)
+    | Exists (pl, b) ->
+        Printf.sprintf "exists (%s) :: %s"
+          (String.concat ", "
+             (List.map
+                (fun (i, t) ->
+                  Printf.sprintf "%s:%s" (show_ident i) (show_btype t))
+                pl))
+          (show_expr b)
+    | ExprCall (i, pl, b) ->
+        Printf.sprintf "%s (%s) : %s" i
+          (String.concat ", "
+             (List.map (fun i -> Printf.sprintf "%s" (show_expr i)) pl))
+          (show_btype b)
+    | Old e -> Printf.sprintf "old(%s)" (show_expr e)
 
   and show_expr e = show_expr_node (expr_view e)
 
@@ -299,6 +344,12 @@ module BasilAST = struct
   let unexp ~op arg = cons (UnaryExpr (op, arg))
   let zero_extend ~n_prefix_bits arg = cons (ZeroExtend (n_prefix_bits, arg))
   let sign_extend ~n_prefix_bits arg = cons (SignExtend (n_prefix_bits, arg))
+  let old e = cons (Old e)
+  let forall params e = cons (Forall (params, e))
+  let exists params e = cons (Exists (params, e))
+
+  let expr_call id ?(return_type = Top) params =
+    cons (ExprCall (id, params, return_type))
 
   let bvextract ~hi_incl ~lo_excl arg =
     cons (Extract (hi_incl, lo_excl, arg))
@@ -491,6 +542,12 @@ module BasilASTLoader = struct
                BasilAST.LVarDef (unsafe_unsigil (`Local i), transType t))
     | ListOutParams lvars -> List.map transLVar lvars
 
+  and unpackLVars lvs =
+    List.map
+      (function
+        | LocalVar1 (i, t) -> (unsafe_unsigil (`Local i), transType t))
+      lvs
+
   and transJump (x : BasilIR.AbsBasilIR.jump) : jump =
     match x with
     | GoTo bidents ->
@@ -580,6 +637,11 @@ module BasilASTLoader = struct
     | Literal (IntLiteral intval) -> intconst (transIntVal intval)
     | Literal TrueLiteral -> boolconst true
     | Literal FalseLiteral -> boolconst false
+    | OldExpr e -> old (transExpr e)
+    | Forall (LambdaDef1 (lv, _, e)) -> forall (unpackLVars lv) (transExpr e)
+    | Exists (LambdaDef1 (lv, _, e)) -> exists (unpackLVars lv) (transExpr e)
+    | FunctionOp (gi, args) ->
+        expr_call (unsafe_unsigil (`Global gi)) (List.map transExpr args)
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) : BasilAST.binOp =
     match x with

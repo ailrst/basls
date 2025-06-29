@@ -129,6 +129,11 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | IntConst intVal -> e
         | BoolConst true -> e
         | BoolConst false -> e
+        | Old e -> old (self#visit_expr e)
+        | Forall (p, b) -> forall p (self#visit_expr b)
+        | Exists (p, b) -> exists p (self#visit_expr b)
+        | ExprCall (p, b, t) ->
+            expr_call p ~return_type:t (List.map self#visit_expr b)
       in
       doVisit vis (vis#vexpr e) next e
 
