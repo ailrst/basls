@@ -523,7 +523,6 @@ class lsp_server =
   object (self)
     inherit Linol_lwt.Jsonrpc2.server
 
-    (* one env per document *)
     val buffers
         : (Linol_lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t =
       Hashtbl.create 32
@@ -547,13 +546,9 @@ class lsp_server =
       let diags = diagnostics new_state in
       notify_back#send_diagnostic diags
 
-    (* We now override the [on_notify_doc_did_open] method that will be
-       called by the server each time a new document is opened. *)
     method on_notif_doc_did_open ~notify_back d ~content : unit Linol_lwt.t =
       self#_on_doc ~notify_back d.uri content
 
-    (* Similarly, we also override the [on_notify_doc_did_change] method that
-       will be called by the server each time a new document is opened. *)
     method on_notif_doc_did_change ~notify_back d _c ~old_content:_old
         ~new_content =
       self#_on_doc ~notify_back d.uri new_content
@@ -633,10 +628,6 @@ class lsp_server =
     method on_req_symbol ~notify_back ~id ~uri ~workDoneToken
         ~partialResultToken e =
       log "req syms";
-      (*(notify_back#work_done_progress_begin (WorkDoneProgressBegin.create
-        ~title:"symbols" ())) >>= fun e ->
-        (notify_back#work_done_progress_end (WorkDoneProgressEnd.create
-        ~message:"completed" ())) >>= *)
       let r =
         (match (Hashtbl.find buffers uri).ast with
         | Ast (p, syms) -> Some syms
@@ -647,8 +638,6 @@ class lsp_server =
       (function Some x -> log "syms" | None -> log "no syms") r;
       Lwt.return r
 
-    (* On document closes, we remove the state associated to the file from
-       the global hashtable state, to avoid leaking memory. *)
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
@@ -706,4 +695,3 @@ let () =
              "")))
     oc;
   run ()
-(* Finally, we actually run the server *)
