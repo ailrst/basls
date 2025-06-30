@@ -13,12 +13,20 @@
  (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
  )
 
+(ocamllex lexkeywords)
+
+(menhir 
+  (modules parkeywords)
+ )
+
+
+
 (executable
  (public_name ocamlBasil)
  (name main)
  (flags
   (-w -27 -w -39 -w -33))
- (modules main )
+ (modules main lexkeywords parkeywords kwtypes)
  (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
  (libraries 
   linol

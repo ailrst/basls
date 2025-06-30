@@ -427,7 +427,7 @@ module BasilASTLoader = struct
 
   let rec transBVTYPE (x : bVTYPE) : BasilAST.btype =
     match x with
-    | BVTYPE string ->
+    | BVTYPE (_, string) ->
         let sz =
           String.split_on_char 'v' string |> function
           | h :: l :: _ -> int_of_string l
@@ -493,8 +493,8 @@ module BasilASTLoader = struct
 
   and transIntVal (x : intVal) : integer =
     match x with
-    | HexInt (IntegerHex ihex) -> Z.of_string ihex
-    | DecInt (IntegerDec i) -> Z.of_string i
+    | HexInt (IntegerHex (_, ihex)) -> Z.of_string ihex
+    | DecInt (IntegerDec (_, i)) -> Z.of_string i
 
   and transEndian (x : BasilIR.AbsBasilIR.endian) : BasilAST.endian =
     match x with LittleEndian -> LittleEndian | BigEndian -> BigEndian

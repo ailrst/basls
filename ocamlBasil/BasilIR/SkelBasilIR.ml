@@ -12,6 +12,14 @@ let rec transBVTYPE (x : bVTYPE) : result = match x with
     BVTYPE string -> failure x
 
 
+and transINTTYPE (x : iNTTYPE) : result = match x with
+    INTTYPE string -> failure x
+
+
+and transBOOLTYPE (x : bOOLTYPE) : result = match x with
+    BOOLTYPE string -> failure x
+
+
 and transBIdent (x : bIdent) : result = match x with
     BIdent string -> failure x
 
@@ -91,11 +99,11 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transIntType (x : intType) : result = match x with
-    IntT  -> failure x
+    IntT inttype -> failure x
 
 
 and transBoolType (x : boolType) : result = match x with
-    BoolT  -> failure x
+    BoolT booltype -> failure x
 
 
 and transMapType (x : mapType) : result = match x with

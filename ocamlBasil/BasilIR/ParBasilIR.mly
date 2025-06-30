@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_int KW_bool KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_block KW_proc KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_block KW_proc KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -26,7 +26,9 @@ open Lexing
 %token <float>  TOK_Double
 %token <int>    TOK_Integer
 %token <string> TOK_String
-%token <string>               TOK_BVTYPE
+%token <(int * int) * string> TOK_BVTYPE
+%token <(int * int) * string> TOK_INTTYPE
+%token <(int * int) * string> TOK_BOOLTYPE
 %token <(int * int) * string> TOK_BIdent
 %token <(int * int) * string> TOK_LocalIdent
 %token <(int * int) * string> TOK_GlobalIdent
@@ -38,8 +40,8 @@ open Lexing
 %token <(int * int) * string> TOK_EndRec
 %token <string>               TOK_LambdaSep
 %token <string>               TOK_Str
-%token <string>               TOK_IntegerHex
-%token <string>               TOK_IntegerDec
+%token <(int * int) * string> TOK_IntegerHex
+%token <(int * int) * string> TOK_IntegerDec
 
 %start pModuleT pDeclaration_list pBlockIdent_list pGobbleScolon pDeclaration pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pStatement_list pAssignment pStatement pAssignment_list pLocalVar pGlobalVar pLocalVar_list pCallLVars pJump pLVar pLVar_list pBlock_list pBlock pAttrKeyValue pAttrKeyValue_list pAttrDefList pAttrValue_list pAttrValue pParams pParams_list pProcSig pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpecDecl pProgSpec pFunSpecDecl_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
@@ -155,6 +157,8 @@ open Lexing
 %type <AbsBasilIR.progSpec list> progSpec_list
 
 %type <AbsBasilIR.bVTYPE> bVTYPE
+%type <AbsBasilIR.iNTTYPE> iNTTYPE
+%type <AbsBasilIR.bOOLTYPE> bOOLTYPE
 %type <AbsBasilIR.bIdent> bIdent
 %type <AbsBasilIR.localIdent> localIdent
 %type <AbsBasilIR.globalIdent> globalIdent
@@ -317,10 +321,10 @@ procDef : funSpecDecl_list { ProcedureDecl $1 }
   | funSpecDecl_list beginList block_list endList { ProcedureDef ($1, $2, $3, $4) }
   ;
 
-intType : KW_int { IntT  }
+intType : iNTTYPE { IntT $1 }
   ;
 
-boolType : KW_bool { BoolT  }
+boolType : bOOLTYPE { BoolT $1 }
   ;
 
 mapType : SYMB5 typeT SYMB7 typeT SYMB6 { MapT ($2, $4) }
@@ -563,6 +567,8 @@ progSpec_list : /* empty */ { []  }
   ;
 
 bVTYPE : TOK_BVTYPE { BVTYPE ($1)};
+iNTTYPE : TOK_INTTYPE { INTTYPE ($1)};
+bOOLTYPE : TOK_BOOLTYPE { BOOLTYPE ($1)};
 bIdent : TOK_BIdent { BIdent ($1)};
 localIdent : TOK_LocalIdent { LocalIdent ($1)};
 globalIdent : TOK_GlobalIdent { GlobalIdent ($1)};

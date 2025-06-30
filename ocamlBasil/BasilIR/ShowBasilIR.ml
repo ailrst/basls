@@ -38,7 +38,9 @@ let showList (showFun : 'a -> showable) (xs : 'a list) : showable = fun buf ->
 let showInt (i:int) : showable = s2s (string_of_int i)
 let showFloat (f:float) : showable = s2s (string_of_float f)
 
-let rec showBVTYPE (AbsBasilIR.BVTYPE i) : showable = s2s "BVTYPE " >> showString i
+let rec showBVTYPE (AbsBasilIR.BVTYPE (_,i)) : showable = s2s "BVTYPE " >> showString i
+let rec showINTTYPE (AbsBasilIR.INTTYPE (_,i)) : showable = s2s "INTTYPE " >> showString i
+let rec showBOOLTYPE (AbsBasilIR.BOOLTYPE (_,i)) : showable = s2s "BOOLTYPE " >> showString i
 let rec showBIdent (AbsBasilIR.BIdent (_,i)) : showable = s2s "BIdent " >> showString i
 let rec showLocalIdent (AbsBasilIR.LocalIdent (_,i)) : showable = s2s "LocalIdent " >> showString i
 let rec showGlobalIdent (AbsBasilIR.GlobalIdent (_,i)) : showable = s2s "GlobalIdent " >> showString i
@@ -50,8 +52,8 @@ let rec showBeginRec (AbsBasilIR.BeginRec (_,i)) : showable = s2s "BeginRec " >>
 let rec showEndRec (AbsBasilIR.EndRec (_,i)) : showable = s2s "EndRec " >> showString i
 let rec showLambdaSep (AbsBasilIR.LambdaSep i) : showable = s2s "LambdaSep " >> showString i
 let rec showStr (AbsBasilIR.Str i) : showable = s2s "Str " >> showString i
-let rec showIntegerHex (AbsBasilIR.IntegerHex i) : showable = s2s "IntegerHex " >> showString i
-let rec showIntegerDec (AbsBasilIR.IntegerDec i) : showable = s2s "IntegerDec " >> showString i
+let rec showIntegerHex (AbsBasilIR.IntegerHex (_,i)) : showable = s2s "IntegerHex " >> showString i
+let rec showIntegerDec (AbsBasilIR.IntegerDec (_,i)) : showable = s2s "IntegerDec " >> showString i
 
 let rec showModuleT (e : AbsBasilIR.moduleT) : showable = match e with
        AbsBasilIR.Module1 declarations -> s2s "Module1" >> c2s ' ' >> c2s '(' >> showList showDeclaration declarations >> c2s ')'
@@ -80,11 +82,11 @@ and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
-       AbsBasilIR.IntT  -> s2s "IntT"
+       AbsBasilIR.IntT inttype -> s2s "IntT" >> c2s ' ' >> c2s '(' >> showINTTYPE inttype >> c2s ')'
 
 
 and showBoolType (e : AbsBasilIR.boolType) : showable = match e with
-       AbsBasilIR.BoolT  -> s2s "BoolT"
+       AbsBasilIR.BoolT booltype -> s2s "BoolT" >> c2s ' ' >> c2s '(' >> showBOOLTYPE booltype >> c2s ')'
 
 
 and showMapType (e : AbsBasilIR.mapType) : showable = match e with
