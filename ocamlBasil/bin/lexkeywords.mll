@@ -26,9 +26,11 @@ rule token =
                 { TOK_COMMENT ((lexeme_start lexbuf, lexeme_end lexbuf), lexeme lexbuf) }
       | "/*" [^ '*']* '*' ([^ '*' '/'][^ '*']* '*' | '*')* '/'
                 { TOK_COMMENT ((lexeme_start lexbuf, lexeme_end lexbuf), lexeme lexbuf) }
-      | keyword { let l = lexeme lexbuf in (Hashtbl.find_opt resword_table l |> (function 
+      | [' ' '\t' '\r'] keyword { let l = lexeme lexbuf in 
+            let l = String.sub l 1 ((String.length l) - 1) in
+            (Hashtbl.find_opt resword_table l |> (function 
             | None -> token lexbuf
-            | Some x -> TOK_KEYWORD ((lexeme_start lexbuf , lexeme_end lexbuf), l))) }
+            | Some x -> TOK_KEYWORD ((lexeme_start lexbuf + 1, lexeme_end lexbuf), l))) }
       | [' ' '\t' '\r']
                 { token lexbuf }
       | '\n'    { incr_lineno lexbuf; token lexbuf }
