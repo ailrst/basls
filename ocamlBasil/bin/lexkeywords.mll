@@ -19,14 +19,14 @@ let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
 }
 
 let _letter = ['a'-'z' 'A'-'Z' '\192' - '\255'] # ['\215' '\247']
-let keyword = _letter +
+let keyword = ('#' | '$' | '_' | _letter) +
 
 rule token =
   parse "//" (_ # '\n')*
                 { TOK_COMMENT ((lexeme_start lexbuf, lexeme_end lexbuf), lexeme lexbuf) }
       | "/*" [^ '*']* '*' ([^ '*' '/'][^ '*']* '*' | '*')* '/'
                 { TOK_COMMENT ((lexeme_start lexbuf, lexeme_end lexbuf), lexeme lexbuf) }
-      | [' ' '\t' '\r'] keyword { let l = lexeme lexbuf in 
+      | [^  'a'-'z' 'A'-'Z' '#' '_' ] keyword { let l = lexeme lexbuf in 
             let l = String.sub l 1 ((String.length l) - 1) in
             (Hashtbl.find_opt resword_table l |> (function 
             | None -> token lexbuf
