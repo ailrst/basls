@@ -8,7 +8,7 @@ module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)
 open Basillang
 
-let debug = true
+let debug = false
 let oc = if debug then Some (open_out ".basillsplog") else None
 
 let bident_of_blockident = function
