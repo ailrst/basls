@@ -4,7 +4,7 @@ synopsis: "LSP for BASIL IR"
 maintainer: ["ailrst"]
 authors: ["ailrst"]
 license: "Apache-2.0"
-tags: ["lsp"]
+tags: ["ir"]
 homepage: "https://github.com/ailrst/basls"
 doc: "https://ailrst.github.io/basls"
 bug-reports: "https://github.com/ailrst/basls/issues"
@@ -12,7 +12,6 @@ depends: [
   "ocaml"
   "dune" {>= "3.16"}
   "menhir"
-  "basil_ast"
   "zarith"
   "ocamlgraph"
   "hashcons"

@@ -2,6 +2,7 @@
 (executable
  (public_name basiltool)
  (name basiltool)
+ (package basil_ast)
  (flags
   (-w -27 -w -39 -w -33))
  (modules basiltool)
