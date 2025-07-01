@@ -415,7 +415,6 @@ module BasilASTLoader = struct
   open BasilIR.AbsBasilIR
   open BasilAST
 
-  let oc = open_out "logger1"
   let failure x = failwith "Undefined case." (* x discarded *)
 
   let rec transBVTYPE (x : bVTYPE) : BasilAST.btype =

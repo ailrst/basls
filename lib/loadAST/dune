@@ -35,5 +35,5 @@
    LexBasilIR.mll
    ParBasilIR.mly
  )
- (action (run	bnfc --ocaml-menhir -o . BasilIR.cf))
+  (action (run	bnfc --ocaml-menhir -o . BasilIR.cf))
  )
