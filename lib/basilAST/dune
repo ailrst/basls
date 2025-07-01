@@ -1,0 +1,21 @@
+
+
+(documentation
+  (package basil_ast)
+  (mld_files index))
+
+(library 
+ (public_name basil_ast)
+ (name basillang)
+ (modules basilASTVisitor basilAST cfg)
+(libraries BasilIR
+           hashcons
+           ocamlgraph
+           zarith
+           containers
+           basilloader
+           common
+  )
+  (flags (-w -27 -w -39 -w -33 -w -23))
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ )

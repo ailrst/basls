@@ -20,7 +20,7 @@ Neovim (astonvim astrolsp.lua) lsp config :
        "basillsp"
     },
     config = {
-      basillsp = { cmd={"ocamlBasil"}, filetypes={"skill"}, root_dir = require("lspconfig.util").root_pattern("."),},
+      basillsp = { cmd={"basilLSP"}, filetypes={"skill"}, root_dir = require("lspconfig.util").root_pattern("."),},
     },
     ...
 

@@ -1,0 +1,27 @@
+(ocamllex lexkeywords)
+
+(menhir 
+  (modules parkeywords)
+ )
+
+
+(documentation
+ (package basil_lsp)
+  (mld_files index))
+
+(executable
+ (public_name basilLSP)
+ (package basil_lsp)
+ (name main)
+ (flags
+  (-w -27 -w -39 -w -33))
+ (modules main lexkeywords parkeywords kwtypes)
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ (libraries 
+  linol
+  linol-lwt
+  lsp
+  basilloader
+  basillang
+  ))
+

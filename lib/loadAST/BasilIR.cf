@@ -4,8 +4,9 @@ terminator Declaration ";";
 
 {- TOKENS -}
 
-token BVTYPE ('b' 'v' digit+) ;
-
+position token BVTYPE ('b' 'v' digit+) ;
+position token INTTYPE {"int"} ;
+position token BOOLTYPE {"bool"} ;
 
 {- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*) '`'; -}
 position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_.$#~"])*) ;
@@ -28,8 +29,8 @@ token LambdaSep ({"::"} | {"->"}) ;
 {- Literals -}
 
 token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
-token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
-token IntegerDec (digit+);
+position token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
+position token IntegerDec (digit+);
 
 -- gobble extra semicolons 
 EmptyScolon . GobbleScolon ::= "";
@@ -54,8 +55,8 @@ Procedure . Declaration ::= ProcSig AttrDefList  ProcDef ;
 ProcedureDecl . ProcDef ::= [ FunSpecDecl ] ;
 ProcedureDef  . ProcDef ::= [ FunSpecDecl ] BeginList [Block] EndList ;
 
-IntT . IntType ::= "int" ;
-BoolT . BoolType ::= "bool" ;
+IntT . IntType ::= INTTYPE ;
+BoolT . BoolType ::= BOOLTYPE ;
 MapT . MapType ::=  "(" Type "->" Type ")";
 BVT . BVType ::= BVTYPE ;
 

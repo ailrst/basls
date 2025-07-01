@@ -1,11 +1,12 @@
 open Yojson
 open Lexing
-open BasilIR
-open BasilVisitor
+open Basilloader.BasilVisitor
 open Lwt.Infix
 open Lsp.Types
+open BasilIR
 module IntMap = Map.Make (Int)
 module IntSet = Set.Make (Int)
+open Basillang
 
 let debug = false
 let oc = if debug then Some (open_out ".basillsplog") else None
@@ -39,6 +40,10 @@ let get_linenum (linebreaks : linebreaks) (char_pos : int) =
 module LineCol = struct
   type t = int * int
 
+  let show x =
+    let l, c = x in
+    Printf.sprintf "(line: %d), (col: %d)" l c
+
   let compare a b =
     match Int.compare (fst a) (fst b) with
     | 0 -> Int.compare (snd a) (snd b)
@@ -52,6 +57,8 @@ module LineCol = struct
   let to_position p =
     Linol_lwt.Position.create ~line:(fst p) ~character:(snd p)
 
+  let of_position (p : Linol_lwt.Position.t) = (p.line, p.character)
+
   let range (b : t) (e : t) =
     Linol_lwt.Range.create ~start:(to_position b) ~end_:(to_position e)
 end
@@ -60,6 +67,10 @@ module Token = struct
   (* order by start of token; we expect tokens to be disjoint *)
   (* (start, size) *)
   type t = LineCol.t * int
+
+  let show (x : t) =
+    let l, c = x in
+    Printf.sprintf "(line: %s), (size: %d)" (LineCol.show l) c
 
   let compare a b = LineCol.compare (fst a) (fst b)
   let create line column length = (LineCol.create line column, length)
@@ -113,6 +124,11 @@ let token_of_char_range (linebreaks : linebreaks) (p1 : int) (p2 : int) :
   let size = p2 - p1 in
   Token.create line_no column size
 
+let token_of_lexer_token (linebreaks : linebreaks)
+    (token : (int * int) * string) : Token.t =
+  let (b, e), n = token in
+  token_of_char_range linebreaks b e
+
 let token_of_bident (linebreaks : linebreaks) (id : AbsBasilIR.bIdent) :
     Token.t =
   match id with
@@ -150,11 +166,44 @@ let find_token_opt (tokens : 'a TokenMap.t) (pos : LineCol.t) : 'a option =
 
 module SemanticTokensProcessor = struct
   type token_info = { token_type : string; token_modifiers : string list }
+  [@@deriving show]
+
   type t = token_info TokenMap.t
+
+  let lex_tokens_of_string linebreaks s =
+    let open Kwtypes in
+    let lexbuf = Lexing.from_string s in
+    let tp = Parkeywords.kwl Lexkeywords.token lexbuf in
+    tp
+    |> List.filter_map (function
+         | Keyword ((b, e), i) ->
+             Some
+               ( token_of_char_range linebreaks b e,
+                 { token_type = "keyword"; token_modifiers = [] } )
+         | _ -> None)
+    |> TokenMap.of_list
+
+  let show (x : t) =
+    x |> TokenMap.to_list
+    |> List.map (fun (k, v) ->
+           Printf.sprintf "%s : %s" (Token.show k) (show_token_info v))
+    |> String.concat "\n"
 
   (* dealing with int-indexed tokens *)
   let token_mod = [ "declaration"; "definition" ]
-  let token_typ = [ "class"; "method"; "function" ]
+
+  let token_typ =
+    [
+      "class";
+      "method";
+      "function";
+      "variable";
+      "type";
+      "number";
+      "parameter";
+      "keyword";
+    ]
+
   let to_index m = List.mapi (fun i v -> (v, i)) m |> StringMap.of_list
 
   let get_token_mod : string -> int =
@@ -165,20 +214,13 @@ module SemanticTokensProcessor = struct
     let m = to_index token_typ in
     fun i -> StringMap.find i m
 
-  (*TODO: probably want to implement ranges for efficiency*)
   let semantic_tokens_config =
     let stoken_legend =
       Linol_lwt.SemanticTokensLegend.create ~tokenModifiers:token_mod
         ~tokenTypes:token_typ
     in
-    Linol_lwt.SemanticTokensRegistrationOptions.create
-      ~full:
-        (`Full
-           (Linol_lwt.SemanticTokensRegistrationOptions.create_full
-              ~delta:false ()))
-      ~legend:stoken_legend ()
-
-  type abs_token = { tok : Token.t; typ : int; modifier : int list }
+    Linol_lwt.SemanticTokensRegistrationOptions.create ~full:(`Bool true)
+      ~range:true ~legend:stoken_legend ()
 
   let token_to_array (tok : Token.t) (tok_info : token_info) =
     (* https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens *)
@@ -194,6 +236,10 @@ module SemanticTokensProcessor = struct
     [| line; character; length; token_type; modifier_bitset |]
 
   let empty = TokenMap.empty
+
+  let add_one (key : Token.t) ~(token_type : string) ?(token_modifiers = [])
+      m =
+    TokenMap.add key { token_type; token_modifiers } m
 
   let add xs (e : 'a -> Token.t * token_info) tm =
     Seq.map e xs |> fun x -> TokenMap.add_seq x tm
@@ -243,27 +289,28 @@ module Processor = struct
     block_defs : def_info StringMap.t;
     proc_refs : string TokenMap.t;
     block_refs : string TokenMap.t;
+    all_tokens : SemanticTokensProcessor.t;
   }
 
+  let get_semantic_token_map (s : symbs) =
+    SemanticTokensProcessor.empty
+    |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
+         (fun (_, di) ->
+           ( di.label_tok,
+             { token_type = "class"; token_modifiers = [ "definition" ] } ))
+    |> SemanticTokensProcessor.add (StringMap.to_rev_seq s.block_defs)
+         (fun (_, di) ->
+           ( di.label_tok,
+             { token_type = "method"; token_modifiers = [ "definition" ] } ))
+    |> SemanticTokensProcessor.add_tokmap s.block_refs
+         { token_type = "method"; token_modifiers = [] }
+    |> SemanticTokensProcessor.add_tokmap s.proc_refs
+         { token_type = "class"; token_modifiers = [] }
+    |> TokenMap.union (fun i a b -> Some a) s.all_tokens
+
   let to_semantic_highlight_data (s : symbs) =
-    let toks =
-      SemanticTokensProcessor.empty
-      |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
-           (fun (_, di) ->
-             ( di.label_tok,
-               { token_type = "class"; token_modifiers = [ "definition" ] }
-             ))
-      |> SemanticTokensProcessor.add (StringMap.to_rev_seq s.block_defs)
-           (fun (_, di) ->
-             ( di.label_tok,
-               { token_type = "method"; token_modifiers = [ "definition" ] }
-             ))
-      |> SemanticTokensProcessor.add_tokmap s.block_refs
-           { token_type = "method"; token_modifiers = [] }
-      |> SemanticTokensProcessor.add_tokmap s.proc_refs
-           { token_type = "class"; token_modifiers = [] }
-    in
-    SemanticTokensProcessor.to_semantic_tokens_full toks
+    SemanticTokensProcessor.to_semantic_tokens_full
+      (get_semantic_token_map s)
 
   let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
@@ -337,6 +384,135 @@ module Processor = struct
         (String.to_seqi s)
     in
     IntMap.add 0 0 @@ IntMap.add_seq breaks IntMap.empty
+
+  let rec type_idents (t : typeT) =
+    match t with
+    | TypeBVType (BVT (BVTYPE t)) -> [ t ]
+    | TypeIntType (IntT (INTTYPE t)) -> [ t ]
+    | TypeBoolType (BoolT (BOOLTYPE t)) -> [ t ]
+    | TypeMapType (MapT (t1, t2)) -> type_idents t1 @ type_idents t2
+
+  let pos_of_intval t =
+    match t with HexInt (IntegerHex i) -> i | DecInt (IntegerDec i) -> i
+
+  class getTokens (linebreaks : linebreaks) =
+    object (self)
+      val mutable tokens : SemanticTokensProcessor.t =
+        SemanticTokensProcessor.empty
+
+      inherit nopBasilVisitor
+      method get_tokens () = tokens
+
+      method add_tok (t : (int * int) * string) (token_type : string) : unit
+          =
+        let tok = token_of_lexer_token linebreaks t in
+        tokens <- SemanticTokensProcessor.add_one tok ~token_type tokens
+
+      method add_tok_modifiers (t : (int * int) * string)
+          (token_type : string) (token_modifiers : string list) : unit =
+        let tok = token_of_lexer_token linebreaks t in
+        tokens <-
+          SemanticTokensProcessor.add_one tok ~token_type ~token_modifiers
+            tokens
+
+      method! vlvar (lv : lVar) =
+        match lv with
+        | LVarDef (LocalVar1 (LocalIdent i, t)) ->
+            self#add_tok i "variable";
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            SkipChildren
+        | GlobalLVar (GlobalVar1 (GlobalIdent i, t)) ->
+            self#add_tok i "variable";
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            SkipChildren
+
+      method! vdecl (p : declaration) =
+        (match p with
+        | AxiomDecl _ -> ()
+        | ProgDecl (ProcIdent i, _) -> self#add_tok_modifiers i "class" []
+        | ProgDeclWithSpec (ProcIdent i, _, _, _, _) ->
+            self#add_tok_modifiers i "class" []
+        | SharedMemDecl (GlobalIdent i, t) ->
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            self#add_tok_modifiers i "variable" [ "declaration" ]
+        | UnsharedMemDecl (GlobalIdent i, t) ->
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            self#add_tok_modifiers i "variable" [ "declaration" ]
+        | VarDecl (GlobalIdent i, t) ->
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            self#add_tok_modifiers i "variable" [ "declaration" ]
+        | UninterpFunDecl (attr, GlobalIdent i, ts, t) ->
+            List.concat_map type_idents (t :: ts)
+            |> List.iter (fun i -> self#add_tok i "type");
+            self#add_tok_modifiers i "function" [ "declaration" ]
+        | FunDef (attr, GlobalIdent i, _, t, _) ->
+            type_idents t |> List.iter (fun i -> self#add_tok i "type");
+            self#add_tok_modifiers i "function" [ "declaration" ]
+        | Procedure
+            (ProcedureSig (ProcIdent i, inparams, outparams), attrs, def) ->
+            let of_param = function
+              | Param (LocalIdent i, t) ->
+                  self#add_tok i "parameter";
+                  type_idents t |> List.iter (fun i -> self#add_tok i "type")
+            in
+            List.iter of_param inparams;
+            List.iter of_param outparams;
+            self#add_tok_modifiers i "class" [ "declaration" ]);
+        DoChildren
+
+      method! vstmt (s : statement) =
+        match s with
+        | SLoad (lv, _, GlobalIdent i, exp, iv) ->
+            self#add_tok (pos_of_intval iv) "number";
+            self#add_tok i "variable";
+            DoChildren
+        | SStore (_, GlobalIdent i, _, _, iv) ->
+            self#add_tok i "variable";
+            self#add_tok (pos_of_intval iv) "number";
+            DoChildren
+        | _ -> DoChildren
+
+      method! vexpr (e : expr) =
+        match e with
+        | FunctionOp (GlobalIdent i, p) ->
+            self#add_tok i "function";
+            DoChildren
+        | GRVar (GlobalVar1 (GlobalIdent i, t)) ->
+            self#add_tok i "variable";
+            List.iter (fun i -> self#add_tok i "type") (type_idents t);
+            SkipChildren
+        | LRVar (LocalVar1 (LocalIdent i, t)) ->
+            self#add_tok i "variable";
+            List.iter (fun i -> self#add_tok i "type") (type_idents t);
+            SkipChildren
+        | Literal (IntLiteral (HexInt (IntegerHex i))) ->
+            self#add_tok i "number";
+            SkipChildren
+        | Literal (IntLiteral (DecInt (IntegerDec i))) ->
+            self#add_tok i "number";
+            SkipChildren
+        | Literal (BVLiteral (BV (HexInt (IntegerHex i), BVT (BVTYPE t)))) ->
+            self#add_tok i "number";
+            self#add_tok t "type";
+            SkipChildren
+        | Literal (BVLiteral (BV (DecInt (IntegerDec i), BVT (BVTYPE t)))) ->
+            self#add_tok i "number";
+            self#add_tok t "type";
+            SkipChildren
+        | Literal TrueLiteral -> SkipChildren
+        | Literal FalseLiteral -> SkipChildren
+        | Extract (hi, lo, e) ->
+            self#add_tok (pos_of_intval hi) "number";
+            self#add_tok (pos_of_intval lo) "number";
+            DoChildren
+        | ZeroExtend (i, _) ->
+            self#add_tok (pos_of_intval i) "number";
+            DoChildren
+        | SignExtend (i, _) ->
+            self#add_tok (pos_of_intval i) "number";
+            DoChildren
+        | _ -> DoChildren
+    end
 
   class getBlocks (linebreaks : linebreaks) =
     object
@@ -427,13 +603,16 @@ module Processor = struct
 
   let get_symbs (linebreaks : linebreaks) (p : moduleT) =
     let vis = new getBlocks linebreaks in
+    let tvis = new getTokens linebreaks in
     let _ = visit_prog vis p in
+    let _ = visit_prog tvis p in
     {
       proc_defs = vis#get_proc_defs;
       proc_children = vis#get_proc_children;
       block_defs = vis#get_block_defs;
       proc_refs = vis#get_proc_refs;
       block_refs = vis#get_block_refs;
+      all_tokens = tvis#get_tokens ();
     }
 end
 
@@ -454,7 +633,12 @@ type doc_ast =
   | SyntaxError of (string * position * position)
   | Ast of AbsBasilIR.moduleT * Processor.symbs
 
-type state_after_processing = { linebreaks : linebreaks; ast : doc_ast }
+type state_after_processing = {
+  linebreaks : linebreaks;
+  ast : doc_ast;
+  procs : BasilAST.BasilAST.proc list;
+  graphs : (unit -> Cfg.procedure_rec) StringMap.t;
+}
 
 let process (s : string) : state_after_processing =
   let lexbuf = Lexing.from_string s in
@@ -462,12 +646,40 @@ let process (s : string) : state_after_processing =
   try
     let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
     let syms = Processor.get_symbs linebreaks prog in
+    let tokens = SemanticTokensProcessor.lex_tokens_of_string linebreaks s in
+    let syms =
+      {
+        syms with
+        all_tokens =
+          TokenMap.union (fun i a b -> Some a) syms.all_tokens tokens;
+      }
+    in
+    let procs =
+      try BasilAST.BasilASTLoader.transProgram prog
+      with exn ->
+        let e = Printexc.to_string exn in
+        log (Printf.sprintf "%s:\n" e);
+        Option.iter Printexc.print_backtrace oc;
+        []
+    in
+    let graphs =
+      List.map
+        (fun (proc : BasilAST.BasilAST.proc) ->
+          (proc.label, fun () -> Cfg.graph_of_proc proc))
+        procs
+      |> StringMap.of_list
+    in
     (*Processor.print_syms syms; *)
-    { linebreaks; ast = Ast (prog, syms) }
+    { linebreaks; ast = Ast (prog, syms); procs; graphs }
   with ParBasilIR.Error ->
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
-    { linebreaks; ast = SyntaxError (lexeme lexbuf, start_pos, end_pos) }
+    {
+      linebreaks;
+      ast = SyntaxError (lexeme lexbuf, start_pos, end_pos);
+      procs = [];
+      graphs = StringMap.empty;
+    }
 
 let process_some_input_file (_file_contents : string) :
     state_after_processing =
@@ -492,13 +704,15 @@ class lsp_server =
   object (self)
     inherit Linol_lwt.Jsonrpc2.server
 
-    (* one env per document *)
     val buffers
         : (Linol_lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t =
       Hashtbl.create 32
 
     method spawn_query_handler f = Linol_lwt.spawn f
     method! config_definition = Some (`Bool true)
+
+    method! config_code_lens_options =
+      Some (Linol_lsp.Lsp.Types.CodeLensOptions.create ())
 
     method! config_symbol =
       Some
@@ -513,13 +727,9 @@ class lsp_server =
       let diags = diagnostics new_state in
       notify_back#send_diagnostic diags
 
-    (* We now override the [on_notify_doc_did_open] method that will be
-       called by the server each time a new document is opened. *)
     method on_notif_doc_did_open ~notify_back d ~content : unit Linol_lwt.t =
       self#_on_doc ~notify_back d.uri content
 
-    (* Similarly, we also override the [on_notify_doc_did_change] method that
-       will be called by the server each time a new document is opened. *)
     method on_notif_doc_did_change ~notify_back d _c ~old_content:_old
         ~new_content =
       self#_on_doc ~notify_back d.uri new_content
@@ -527,6 +737,51 @@ class lsp_server =
     method on_req_hover ~notify_back ~id ~uri ~pos ~workDoneToken
         (d : Linol_lwt.doc_state) =
       Lwt.return None
+
+    method! on_req_code_lens_resolve ~notify_back ~id code_lens =
+      (* our code lenses are cheap so probably fine to resolve in one
+         stage *)
+      Lwt.return code_lens
+
+    method! config_list_commands = [ "show_cfg" ]
+
+    method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
+      (match args with
+      | Some [ uri; `String proc ] ->
+          Some (Linol_lsp.Uri0.t_of_yojson uri, proc)
+      | _ -> None)
+      |> Option.map (fun (uri, proc_label) ->
+             let state = Hashtbl.find buffers uri in
+             let pg = StringMap.find proc_label state.graphs in
+             let g = pg () in
+             Cfg.display_with_viewer g)
+      |> ignore;
+      Lwt.return (`String "ok")
+
+    method! on_req_code_lens ~notify_back ~id ~uri ~workDoneToken
+        ~partialResultToken ds =
+      let state = Hashtbl.find buffers uri in
+      let p =
+        state.procs
+        |> List.map (fun (p : BasilAST.BasilAST.proc) ->
+               let b, e = p.label_lexical_range |> Option.get in
+               let range =
+                 token_of_char_range state.linebreaks b e |> Token.to_range
+               in
+               let command : Linol_lsp.Types.Command.t =
+                 {
+                   arguments =
+                     Some [ Linol_lsp.Uri0.yojson_of_t uri; `String p.label ];
+                   command = "show_cfg";
+                   title = "Show CFG";
+                 }
+               in
+               let codelens =
+                 Linol_lsp.Types.CodeLens.create ~command ~range ()
+               in
+               codelens)
+      in
+      Lwt.return p
 
     (* `Location of Location.t list *)
     method on_req_definition ~notify_back ~id ~uri ~pos ~workDoneToken
@@ -551,10 +806,6 @@ class lsp_server =
     method on_req_symbol ~notify_back ~id ~uri ~workDoneToken
         ~partialResultToken e =
       log "req syms";
-      (*(notify_back#work_done_progress_begin (WorkDoneProgressBegin.create
-        ~title:"symbols" ())) >>= fun e ->
-        (notify_back#work_done_progress_end (WorkDoneProgressEnd.create
-        ~message:"completed" ())) >>= *)
       let r =
         (match (Hashtbl.find buffers uri).ast with
         | Ast (p, syms) -> Some syms
@@ -565,8 +816,6 @@ class lsp_server =
       (function Some x -> log "syms" | None -> log "no syms") r;
       Lwt.return r
 
-    (* On document closes, we remove the state associated to the file from
-       the global hashtable state, to avoid leaking memory. *)
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
@@ -588,15 +837,33 @@ class lsp_server =
         r Linol_lwt.Jsonrpc2.IO.t =
       fun ~notify_back:(_ : Linol_lwt.Jsonrpc2.notify_back) ~id:_ _r ->
         match _r with
+        | Linol_lsp.Client_request.SemanticTokensRange
+            { partialResultToken; range; textDocument; workDoneToken } ->
+            log "semantic token range";
+            let begin_range = LineCol.of_position range.start in
+            let end_range = LineCol.of_position range.end_ in
+            let m =
+              (match (Hashtbl.find buffers textDocument.uri).ast with
+              | Ast (p, syms) -> Some syms
+              | _ -> None)
+              |> Option.map Processor.get_semantic_token_map
+              |> Option.map
+                   (TokenMap.filter (fun i _ ->
+                        let pos = fst i in
+                        LineCol.compare pos begin_range > 0
+                        && LineCol.compare pos end_range < 0))
+              |> Option.map SemanticTokensProcessor.to_semantic_tokens_full
+            in
+            Lwt.return m
         | Linol_lsp.Client_request.SemanticTokensFull
             { partialResultToken; textDocument; workDoneToken } ->
             let uri = textDocument.uri in
             (match (Hashtbl.find buffers uri).ast with
             | Ast (p, syms) -> Some syms
             | _ -> None)
-            |> Option.map (fun s -> Processor.to_semantic_highlight_data s)
+            |> Option.map Processor.to_semantic_highlight_data
             |> fun i -> Lwt.return i
-        | _ -> failwith "TODO: handle this\n       request"
+        | _ -> Lwt.fail_with "TODO: handle this request"
   end
 
 let run () =
@@ -611,7 +878,7 @@ let run () =
   | () -> ()
   | exception e ->
       let e = Printexc.to_string e in
-      Printf.eprintf "error: %s\n%!" e;
+      Option.iter (fun oc -> Printf.fprintf oc "error: %s\n%!" e) oc;
       exit 1
 
 let () =
@@ -624,4 +891,3 @@ let () =
              "")))
     oc;
   run ()
-(* Finally, we actually run the server *)
