@@ -27,9 +27,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install System dependency
-        run: sudo apt-get install bnfc
-
       - name: Checkout tree
         uses: actions/checkout@v4
 
