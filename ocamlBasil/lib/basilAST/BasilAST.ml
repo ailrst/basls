@@ -71,6 +71,7 @@ module BasilAST = struct
   let show_unOp x = String.lowercase_ascii (show_unOp x)
   let pp_unOp fmt x = Format.pp_print_string fmt (show_unOp x)
 
+  (** Binary operators *)
   type binOp =
     | EQ
     | NEQ
@@ -114,6 +115,8 @@ module BasilAST = struct
     | BOOLIMPLIES
   [@@deriving show { with_path = false }, eq]
 
+  (** {2 Queries on the return type of binary operators} *)
+
   let binop_is_int = function
     | INTADD | INTMUL | INTSUB | INTDIV | INTMOD -> true
     | BOOLIMPLIES | BVULT | BVULE | BVUGT | BVUGE | BVSLT | BVSLE | BVSGT
@@ -142,30 +145,12 @@ module BasilAST = struct
     | BVSMOD | BVASHR | INTADD | INTMUL | INTSUB | INTDIV | INTMOD ->
         false
 
-  let bool_expr =
-    [
-      EQ;
-      NEQ;
-      INTLT;
-      INTLE;
-      INTGT;
-      INTGE;
-      BOOLAND;
-      BOOLOR;
-      BOOLIMPLIES;
-      BVULT;
-      BVULE;
-      BVUGT;
-      BVUGE;
-      BVSLT;
-      BVSLE;
-      BVSGT;
-      BVSGE;
-    ]
-
   let show_binOp x = String.lowercase_ascii (show_binOp x)
   let pp_binOp fmt x = Format.pp_print_string fmt (show_binOp x)
 
+  (** {1 Definition of hash-consed expressions} *)
+
+  (** {2 Expression tree} *)
   type expr_node =
     | RVar of ident * btype * int
     | BinaryExpr of binOp * expr * expr
@@ -187,10 +172,11 @@ module BasilAST = struct
   let expr_view e = e.node
   let expr_tag e = e.tag
 
+  (** This type-query is slightly inefficient, (but could be efficiently
+      memoised with hash consing) We store just enough information to
+      reconstruct the type locally; only atom exprs (rvars and constants)
+      store their type *)
   let rec expr_type e =
-    (* This is inefficient, (but could be efficiently memoised with hash
-       consing) We store just enough information to reconstruct the type
-       locally; only atom exprs (rvars and constants) store their type *)
     match expr_view e with
     | RVar (_, t, _) -> t
     | BinaryExpr (o, l, r) when binop_is_int o -> Integer
@@ -234,8 +220,11 @@ module BasilAST = struct
 
   let pp_lVar fmt e = Format.pp_print_string fmt (show_lVar e)
 
+  (** {2 Expression hash consing}*)
+
   module ExprHashable = struct
     type t = expr_node
+    (** Definition of hash cons type class instantiation for expr_node *)
 
     let equal (e1 : t) (e2 : t) : bool =
       match (e1, e2) with
@@ -340,6 +329,8 @@ module BasilAST = struct
     | LVarDef (name, typ) -> rvar name ~typ
     | GlobalLVar (name, typ) -> rvar name ~typ
 
+  (** {2 Smart constructors for hash-consed expressions} *)
+
   let binexp ~op l r = cons (BinaryExpr (op, l, r))
   let unexp ~op arg = cons (UnaryExpr (op, arg))
   let zero_extend ~n_prefix_bits arg = cons (ZeroExtend (n_prefix_bits, arg))
@@ -358,6 +349,8 @@ module BasilAST = struct
   let bvconst bv = cons (BVConst bv)
   let intconst i = cons (IntConst i)
   let boolconst b = cons (BoolConst b)
+
+  (**{1 Types of side-effecting/aggregate program constructs} *)
 
   type statement =
     | Assign of (lVar * expr) list
