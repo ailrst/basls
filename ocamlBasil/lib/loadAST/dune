@@ -7,3 +7,33 @@
   (flags (-w -27 -w -39 -w -33 -w -23))
  (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
  )
+
+
+(library
+ (name BasilIR)
+ (public_name basil_ast.BasilIR)
+ (modules AbsBasilIR BNFC_Util PrintBasilIR showBasilIR SkelBasilIR LexBasilIR ParBasilIR)
+ (flags
+  (-w -27 -w -39 -w -33))
+ )
+
+(ocamllex LexBasilIR)
+
+(menhir 
+  (modules ParBasilIR)
+  )
+
+(rule
+ (deps BasilIR.cf)
+ (targets
+   AbsBasilIR.ml
+   BNFC_Util.ml
+   PrintBasilIR.ml
+   ShowBasilIR.ml
+   SkelBasilIR.ml
+   TestBasilIR.ml
+   LexBasilIR.mll
+   ParBasilIR.mly
+ )
+ (action (run	bnfc --ocaml-menhir -o . BasilIR.cf))
+ )

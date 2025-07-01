@@ -22,7 +22,6 @@
   linol-lwt
   lsp
   basilloader
-  BasilIR
   basillang
   ))
 
