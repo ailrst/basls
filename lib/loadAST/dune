@@ -35,5 +35,6 @@
    LexBasilIR.mll
    ParBasilIR.mly
  )
+  (mode promote)
   (action (run	bnfc --ocaml-menhir -o . BasilIR.cf))
  )
