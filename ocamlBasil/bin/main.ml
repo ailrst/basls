@@ -57,6 +57,8 @@ module LineCol = struct
   let to_position p =
     Linol_lwt.Position.create ~line:(fst p) ~character:(snd p)
 
+  let of_position (p : Linol_lwt.Position.t) = (p.line, p.character)
+
   let range (b : t) (e : t) =
     Linol_lwt.Range.create ~start:(to_position b) ~end_:(to_position e)
 end
@@ -172,7 +174,6 @@ module SemanticTokensProcessor = struct
     let open Kwtypes in
     let lexbuf = Lexing.from_string s in
     let tp = Parkeywords.kwl Lexkeywords.token lexbuf in
-    List.iter (fun i -> log (Kwtypes.show_parsed i)) tp;
     tp
     |> List.filter_map (function
          | Keyword ((b, e), i) ->
@@ -213,18 +214,13 @@ module SemanticTokensProcessor = struct
     let m = to_index token_typ in
     fun i -> StringMap.find i m
 
-  (*TODO: probably want to implement ranges for efficiency*)
   let semantic_tokens_config =
     let stoken_legend =
       Linol_lwt.SemanticTokensLegend.create ~tokenModifiers:token_mod
         ~tokenTypes:token_typ
     in
-    Linol_lwt.SemanticTokensRegistrationOptions.create
-      ~full:
-        (`Full
-           (Linol_lwt.SemanticTokensRegistrationOptions.create_full
-              ~delta:false ()))
-      ~legend:stoken_legend ()
+    Linol_lwt.SemanticTokensRegistrationOptions.create ~full:(`Bool true)
+      ~range:true ~legend:stoken_legend ()
 
   let token_to_array (tok : Token.t) (tok_info : token_info) =
     (* https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens *)
@@ -296,27 +292,25 @@ module Processor = struct
     all_tokens : SemanticTokensProcessor.t;
   }
 
+  let get_semantic_token_map (s : symbs) =
+    SemanticTokensProcessor.empty
+    |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
+         (fun (_, di) ->
+           ( di.label_tok,
+             { token_type = "class"; token_modifiers = [ "definition" ] } ))
+    |> SemanticTokensProcessor.add (StringMap.to_rev_seq s.block_defs)
+         (fun (_, di) ->
+           ( di.label_tok,
+             { token_type = "method"; token_modifiers = [ "definition" ] } ))
+    |> SemanticTokensProcessor.add_tokmap s.block_refs
+         { token_type = "method"; token_modifiers = [] }
+    |> SemanticTokensProcessor.add_tokmap s.proc_refs
+         { token_type = "class"; token_modifiers = [] }
+    |> TokenMap.union (fun i a b -> Some a) s.all_tokens
+
   let to_semantic_highlight_data (s : symbs) =
-    log (SemanticTokensProcessor.show s.all_tokens);
-    let toks =
-      SemanticTokensProcessor.empty
-      |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
-           (fun (_, di) ->
-             ( di.label_tok,
-               { token_type = "class"; token_modifiers = [ "definition" ] }
-             ))
-      |> SemanticTokensProcessor.add (StringMap.to_rev_seq s.block_defs)
-           (fun (_, di) ->
-             ( di.label_tok,
-               { token_type = "method"; token_modifiers = [ "definition" ] }
-             ))
-      |> SemanticTokensProcessor.add_tokmap s.block_refs
-           { token_type = "method"; token_modifiers = [] }
-      |> SemanticTokensProcessor.add_tokmap s.proc_refs
-           { token_type = "class"; token_modifiers = [] }
-      |> TokenMap.union (fun i a b -> Some a) s.all_tokens
-    in
-    SemanticTokensProcessor.to_semantic_tokens_full toks
+    SemanticTokensProcessor.to_semantic_tokens_full
+      (get_semantic_token_map s)
 
   let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
@@ -433,7 +427,6 @@ module Processor = struct
             SkipChildren
 
       method! vdecl (p : declaration) =
-        log "vdecl";
         (match p with
         | AxiomDecl _ -> ()
         | ProgDecl (ProcIdent i, _) -> self#add_tok_modifiers i "class" []
@@ -480,7 +473,6 @@ module Processor = struct
         | _ -> DoChildren
 
       method! vexpr (e : expr) =
-        log "vexp";
         match e with
         | FunctionOp (GlobalIdent i, p) ->
             self#add_tok i "function";
@@ -754,17 +746,16 @@ class lsp_server =
     method! config_list_commands = [ "show_cfg" ]
 
     method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
-      let proc =
-        (match args with
-        | Some [ uri; `String proc ] ->
-            Some (Linol_lsp.Uri0.t_of_yojson uri, proc)
-        | _ -> None)
-        |> Option.map (fun (uri, proc_label) ->
-               let state = Hashtbl.find buffers uri in
-               let pg = StringMap.find proc_label state.graphs in
-               let g = pg () in
-               Cfg.display_with_viewer g)
-      in
+      (match args with
+      | Some [ uri; `String proc ] ->
+          Some (Linol_lsp.Uri0.t_of_yojson uri, proc)
+      | _ -> None)
+      |> Option.map (fun (uri, proc_label) ->
+             let state = Hashtbl.find buffers uri in
+             let pg = StringMap.find proc_label state.graphs in
+             let g = pg () in
+             Cfg.display_with_viewer g)
+      |> ignore;
       Lwt.return (`String "ok")
 
     method! on_req_code_lens ~notify_back ~id ~uri ~workDoneToken
@@ -846,15 +837,33 @@ class lsp_server =
         r Linol_lwt.Jsonrpc2.IO.t =
       fun ~notify_back:(_ : Linol_lwt.Jsonrpc2.notify_back) ~id:_ _r ->
         match _r with
+        | Linol_lsp.Client_request.SemanticTokensRange
+            { partialResultToken; range; textDocument; workDoneToken } ->
+            log "semantic token range";
+            let begin_range = LineCol.of_position range.start in
+            let end_range = LineCol.of_position range.end_ in
+            let m =
+              (match (Hashtbl.find buffers textDocument.uri).ast with
+              | Ast (p, syms) -> Some syms
+              | _ -> None)
+              |> Option.map Processor.get_semantic_token_map
+              |> Option.map
+                   (TokenMap.filter (fun i _ ->
+                        let pos = fst i in
+                        LineCol.compare pos begin_range > 0
+                        && LineCol.compare pos end_range < 0))
+              |> Option.map SemanticTokensProcessor.to_semantic_tokens_full
+            in
+            Lwt.return m
         | Linol_lsp.Client_request.SemanticTokensFull
             { partialResultToken; textDocument; workDoneToken } ->
             let uri = textDocument.uri in
             (match (Hashtbl.find buffers uri).ast with
             | Ast (p, syms) -> Some syms
             | _ -> None)
-            |> Option.map (fun s -> Processor.to_semantic_highlight_data s)
+            |> Option.map Processor.to_semantic_highlight_data
             |> fun i -> Lwt.return i
-        | _ -> failwith "TODO: handle this\n       request"
+        | _ -> Lwt.fail_with "TODO: handle this request"
   end
 
 let run () =

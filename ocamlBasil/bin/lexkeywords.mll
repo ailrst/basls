@@ -15,10 +15,11 @@ let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
             pos_lnum = pos.pos_lnum + 1;
             pos_bol = pos.pos_cnum;
   }
-
 }
-
 let _letter = ['a'-'z' 'A'-'Z' '\192' - '\255'] # ['\215' '\247']
+
+(* end copied from generated lexer *)
+
 let keyword = ('#' | '$' | '_' | _letter) +
 
 rule token =
