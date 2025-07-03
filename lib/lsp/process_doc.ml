@@ -108,141 +108,6 @@ module Processor = struct
   let unpack_ident id linebreaks =
     match id with (b, e), n -> (token_of_char_range linebreaks b e, n)
 
-  let rec type_idents (t : typeT) =
-    match t with
-    | TypeBVType (BVType1 (BVTYPE t)) -> [ t ]
-    | TypeIntType (IntType1 (INTTYPE t)) -> [ t ]
-    | TypeBoolType (BoolType1 (BOOLTYPE t)) -> [ t ]
-    | TypeMapType (MapType1 (t1, t2)) -> type_idents t1 @ type_idents t2
-
-  let pos_of_intval t =
-    match t with
-    | IntVal_Hex (IntegerHex i) -> i
-    | IntVal_Dec (IntegerDec i) -> i
-
-  class getTokens (linebreaks : linebreaks) =
-    object (self)
-      val mutable tokens : SemanticTokensProcessor.t =
-        SemanticTokensProcessor.empty
-
-      inherit nopBasilVisitor
-      method get_tokens () = tokens
-
-      method add_tok (t : (int * int) * string) (token_type : string) : unit
-          =
-        let tok = token_of_lexer_token linebreaks t in
-        tokens <- SemanticTokensProcessor.add_one tok ~token_type tokens
-
-      method add_tok_modifiers (t : (int * int) * string)
-          (token_type : string) (token_modifiers : string list) : unit =
-        let tok = token_of_lexer_token linebreaks t in
-        tokens <-
-          SemanticTokensProcessor.add_one tok ~token_type ~token_modifiers
-            tokens
-
-      method! vlvar (lv : lVar) =
-        match lv with
-        | LVar_Local (LocalVar1 (LocalIdent i, t)) ->
-            self#add_tok i "variable";
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            SkipChildren
-        | LVar_Global (GlobalVar1 (GlobalIdent i, t)) ->
-            self#add_tok i "variable";
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            SkipChildren
-
-      method! vdecl (p : decl) =
-        (match p with
-        | Decl_Axiom _ -> ()
-        | Decl_ProgEmpty (ProcIdent i, _) ->
-            self#add_tok_modifiers i "class" []
-        | Decl_ProgWithSpec (ProcIdent i, _, _, _, _) ->
-            self#add_tok_modifiers i "class" []
-        | Decl_SharedMem (GlobalIdent i, t) ->
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            self#add_tok_modifiers i "variable" [ "declaration" ]
-        | Decl_UnsharedMem (GlobalIdent i, t) ->
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            self#add_tok_modifiers i "variable" [ "declaration" ]
-        | Decl_Var (GlobalIdent i, t) ->
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            self#add_tok_modifiers i "variable" [ "declaration" ]
-        | Decl_UninterpFun (attr, GlobalIdent i, ts, t) ->
-            List.concat_map type_idents (t :: ts)
-            |> List.iter (fun i -> self#add_tok i "type");
-            self#add_tok_modifiers i "function" [ "declaration" ]
-        | Decl_Fun (attr, GlobalIdent i, _, t, _) ->
-            type_idents t |> List.iter (fun i -> self#add_tok i "type");
-            self#add_tok_modifiers i "function" [ "declaration" ]
-        | Decl_Proc (ProcIdent i, inparams, outparams, attrib, spec, def) ->
-            let of_param = function
-              | Params1 (LocalIdent i, t) ->
-                  self#add_tok i "parameter";
-                  type_idents t |> List.iter (fun i -> self#add_tok i "type")
-            in
-            List.iter of_param inparams;
-            List.iter of_param outparams;
-            self#add_tok_modifiers i "class" [ "declaration" ]);
-        DoChildren
-
-      method! vstmt (s : stmt) =
-        match s with
-        | Stmt_Load (lv, _, GlobalIdent i, exp, iv) ->
-            self#add_tok (pos_of_intval iv) "number";
-            self#add_tok i "variable";
-            DoChildren
-        | Stmt_Store (_, GlobalIdent i, _, _, iv) ->
-            self#add_tok i "variable";
-            self#add_tok (pos_of_intval iv) "number";
-            DoChildren
-        | _ -> DoChildren
-
-      method! vexpr (e : expr) =
-        match e with
-        | Expr_FunctionOp (GlobalIdent i, p) ->
-            self#add_tok i "function";
-            DoChildren
-        | Expr_Global (GlobalVar1 (GlobalIdent i, t)) ->
-            self#add_tok i "variable";
-            List.iter (fun i -> self#add_tok i "type") (type_idents t);
-            SkipChildren
-        | Expr_Local (LocalVar1 (LocalIdent i, t)) ->
-            self#add_tok i "variable";
-            List.iter (fun i -> self#add_tok i "type") (type_idents t);
-            SkipChildren
-        | Expr_Literal (Value_Int (IntVal_Hex (IntegerHex i))) ->
-            self#add_tok i "number";
-            SkipChildren
-        | Expr_Literal (Value_Int (IntVal_Dec (IntegerDec i))) ->
-            self#add_tok i "number";
-            SkipChildren
-        | Expr_Literal
-            (Value_BV
-               (BVVal1 (IntVal_Hex (IntegerHex i), BVType1 (BVTYPE t)))) ->
-            self#add_tok i "number";
-            self#add_tok t "type";
-            SkipChildren
-        | Expr_Literal
-            (Value_BV
-               (BVVal1 (IntVal_Dec (IntegerDec i), BVType1 (BVTYPE t)))) ->
-            self#add_tok i "number";
-            self#add_tok t "type";
-            SkipChildren
-        | Expr_Literal Value_True -> SkipChildren
-        | Expr_Literal Value_False -> SkipChildren
-        | Expr_Extract (hi, lo, e) ->
-            self#add_tok (pos_of_intval hi) "number";
-            self#add_tok (pos_of_intval lo) "number";
-            DoChildren
-        | Expr_ZeroExtend (i, _) ->
-            self#add_tok (pos_of_intval i) "number";
-            DoChildren
-        | Expr_SignExtend (i, _) ->
-            self#add_tok (pos_of_intval i) "number";
-            DoChildren
-        | _ -> DoChildren
-    end
-
   class getBlocks (linebreaks : linebreaks) =
     object
       (* procid, blockid *)
@@ -330,15 +195,15 @@ module Processor = struct
 
   let get_symbs (linebreaks : linebreaks) (p : moduleT) =
     let vis = new getBlocks linebreaks in
-    let tvis = new getTokens linebreaks in
     let _ = visit_prog vis p in
-    let _ = visit_prog tvis p in
     {
       proc_defs = vis#get_proc_defs;
       proc_children = vis#get_proc_children;
       block_defs = vis#get_block_defs;
       proc_refs = vis#get_proc_refs;
       block_refs = vis#get_block_refs;
-      all_tokens = tvis#get_tokens ();
+      all_tokens =
+        Semantic_tokens.SemanticTokensFromAST.get_semtokens_of_cast
+          linebreaks p;
     }
 end

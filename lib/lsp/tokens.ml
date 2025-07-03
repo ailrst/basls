@@ -7,18 +7,32 @@ open Lsp.Types
 open BasilIR
 open Basillang
 
+(** The lexer gives us character token ranges (start_pos: int, end_pos: int)
+    as an absolute offset from the beginning of the document, while LSP works
+    over (line, column) positions.
+
+    This module handles converting between and query across position
+    representations.
+
+    LineCol.t represents a line-column character position, while Token.t
+    represents a (LineCol.t, size) token character interval.
+
+    We use an IntMap.t inverse map from <begin line character offset> ->
+    <line number> to convert between these. *)
+
 type linebreaks = int IntMap.t
+(** map from character beginning a line to the line number it begins. *)
 
 let linebreaks (s : string) : linebreaks =
-  let count = ref 0 in
+  let line_count = ref 0 in
   let breaks =
     Seq.filter_map
       (* next char is beginning of a line *)
       (fun (i, c) ->
         match c with
         | '\n' ->
-            count := !count + 1;
-            Some (i + 1, !count)
+            line_count := !line_count + 1;
+            Some (i + 1, !line_count)
         | _ -> None)
       (String.to_seqi s)
   in
