@@ -236,18 +236,19 @@ class lsp_server =
         | Linol_lsp.Client_request.SemanticTokensRange
             { partialResultToken; range; textDocument; workDoneToken } ->
             log "semantic token range";
-            let begin_range = LineCol.of_position range.start in
-            let end_range = LineCol.of_position range.end_ in
+            let begin_range : Token.t =
+              (LineCol.of_position range.start, 0)
+            in
+            let end_range : Token.t = (LineCol.of_position range.end_, -1) in
             let m =
               (match (Hashtbl.find buffers textDocument.uri).ast with
-              | Ast (p, syms) -> Some syms
+              | Ast (p, syms) -> Some syms.all_tokens
               | _ -> None)
-              |> Option.map Processor.get_semantic_token_map
-              |> Option.map
-                   (TokenMap.filter (fun i _ ->
-                        let pos = fst i in
-                        LineCol.compare pos begin_range > 0
-                        && LineCol.compare pos end_range < 0))
+              |> Option.map (fun m ->
+                     match TokenMap.split begin_range m with
+                     | l, data, r -> r)
+              |> Option.map (fun m ->
+                     match TokenMap.split end_range m with l, data, r -> l)
               |> Option.map SemanticTokensProcessor.to_semantic_tokens_full
             in
             Lwt.return m
