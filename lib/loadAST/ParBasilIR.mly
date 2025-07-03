@@ -26,7 +26,7 @@ open Lexing
 %token <float>  TOK_Double
 %token <int>    TOK_Integer
 %token <string> TOK_String
-%token <string>               TOK_BVTYPE
+%token <(int * int) * string> TOK_BVTYPE
 %token <(int * int) * string> TOK_INTTYPE
 %token <(int * int) * string> TOK_BOOLTYPE
 %token <(int * int) * string> TOK_BIdent
@@ -40,8 +40,8 @@ open Lexing
 %token <(int * int) * string> TOK_EndRec
 %token <string>               TOK_LambdaSep
 %token <string>               TOK_Str
-%token <string>               TOK_IntegerHex
-%token <string>               TOK_IntegerDec
+%token <(int * int) * string> TOK_IntegerHex
+%token <(int * int) * string> TOK_IntegerDec
 
 %start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pStmt_list pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pLVars pJump pLVar pLVar_list pBlock_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT

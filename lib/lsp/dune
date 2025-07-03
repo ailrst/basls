@@ -1,0 +1,23 @@
+
+
+(ocamllex lexkeywords)
+
+(menhir 
+  (modules parkeywords)
+ )
+
+
+(library 
+ (public_name basil_lsp)
+ (name basillsp)
+ (modules semantic_tokens tokens lexkeywords parkeywords kwtypes process_doc)
+(libraries BasilIR
+           basil_ast
+           common
+           linol-lwt
+           linol
+           lsp
+  )
+  (flags (-w -27 -w -39 -w -33 -w -23))
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ )

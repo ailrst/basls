@@ -81,7 +81,7 @@ let prtString (_:int) (s:string) : doc = render ("\"" ^ String.escaped s ^ "\"")
 
 
 
-let prtBVTYPE _ (AbsBasilIR.BVTYPE i) : doc = render i
+let prtBVTYPE _ (AbsBasilIR.BVTYPE (_,i)) : doc = render i
 
 
 let prtINTTYPE _ (AbsBasilIR.INTTYPE (_,i)) : doc = render i
@@ -126,10 +126,10 @@ let prtLambdaSep _ (AbsBasilIR.LambdaSep i) : doc = render i
 let prtStr _ (AbsBasilIR.Str i) : doc = render i
 
 
-let prtIntegerHex _ (AbsBasilIR.IntegerHex i) : doc = render i
+let prtIntegerHex _ (AbsBasilIR.IntegerHex (_,i)) : doc = render i
 
 
-let prtIntegerDec _ (AbsBasilIR.IntegerDec i) : doc = render i
+let prtIntegerDec _ (AbsBasilIR.IntegerDec (_,i)) : doc = render i
 
 
 
