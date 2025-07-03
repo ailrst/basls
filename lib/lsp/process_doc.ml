@@ -12,6 +12,8 @@ open Common.Util
 
 let log x = ()
 
+(* position information about a program identifier declaration of
+   definition *)
 type def_info = {
   label : string;
   label_tok : Token.t;
@@ -193,7 +195,7 @@ module Processor = struct
             DoChildren
     end
 
-  let get_symbs (linebreaks : linebreaks) (p : moduleT) =
+  let process_cast (linebreaks : linebreaks) (p : moduleT) : symbs =
     let vis = new getBlocks linebreaks in
     let _ = visit_prog vis p in
     {

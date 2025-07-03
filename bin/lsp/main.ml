@@ -41,7 +41,7 @@ let process (s : string) : state_after_processing =
   let linebreaks = linebreaks s in
   try
     let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
-    let syms = Processor.get_symbs linebreaks prog in
+    let syms = Processor.process_cast linebreaks prog in
     let tokens = SemanticTokensProcessor.lex_tokens_of_string linebreaks s in
     let syms =
       {

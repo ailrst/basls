@@ -10,7 +10,7 @@
 (library 
  (public_name basil_lsp)
  (name basillsp)
- (modules semantic_tokens tokens lexkeywords parkeywords kwtypes process_doc)
+ (modules process_doc semantic_tokens tokens lexkeywords parkeywords kwtypes )
 (libraries BasilIR
            basil_ast
            common
