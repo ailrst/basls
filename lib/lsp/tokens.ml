@@ -9,6 +9,21 @@ open Basillang
 
 type linebreaks = int IntMap.t
 
+let linebreaks (s : string) : linebreaks =
+  let count = ref 0 in
+  let breaks =
+    Seq.filter_map
+      (* next char is beginning of a line *)
+      (fun (i, c) ->
+        match c with
+        | '\n' ->
+            count := !count + 1;
+            Some (i + 1, !count)
+        | _ -> None)
+      (String.to_seqi s)
+  in
+  IntMap.add 0 0 @@ IntMap.add_seq breaks IntMap.empty
+
 let get_begin_line (linebreaks : linebreaks) (char_pos : int) =
   match IntMap.find_last_opt (fun l -> l <= char_pos) linebreaks with
   | Some (charpos, x) -> charpos

@@ -108,21 +108,6 @@ module Processor = struct
   let unpack_ident id linebreaks =
     match id with (b, e), n -> (token_of_char_range linebreaks b e, n)
 
-  let linebreaks (s : string) : linebreaks =
-    let count = ref 0 in
-    let breaks =
-      Seq.filter_map
-        (* next char is beginning of a line *)
-        (fun (i, c) ->
-          match c with
-          | '\n' ->
-              count := !count + 1;
-              Some (i + 1, !count)
-          | _ -> None)
-        (String.to_seqi s)
-    in
-    IntMap.add 0 0 @@ IntMap.add_seq breaks IntMap.empty
-
   let rec type_idents (t : typeT) =
     match t with
     | TypeBVType (BVType1 (BVTYPE t)) -> [ t ]

@@ -20,14 +20,6 @@ let log (s : string) =
       flush oc)
     oc
 
-let parse (c : in_channel) : AbsBasilIR.moduleT =
-  let lexbuf = Lexing.from_channel c in
-  try ParBasilIR.pModuleT LexBasilIR.token lexbuf
-  with ParBasilIR.Error ->
-    let start_pos = Lexing.lexeme_start_p lexbuf
-    and end_pos = Lexing.lexeme_end_p lexbuf in
-    raise (BNFC_Util.Parse_error (start_pos, end_pos))
-
 let showTree (t : AbsBasilIR.moduleT) : string =
   "[Linearized tree]\n\n"
   ^ PrintBasilIR.printTree PrintBasilIR.prtModuleT t
@@ -46,7 +38,7 @@ type state_after_processing = {
 
 let process (s : string) : state_after_processing =
   let lexbuf = Lexing.from_string s in
-  let linebreaks = Processor.linebreaks s in
+  let linebreaks = linebreaks s in
   try
     let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
     let syms = Processor.get_symbs linebreaks prog in
@@ -59,7 +51,7 @@ let process (s : string) : state_after_processing =
       }
     in
     let procs =
-      try BasilAST.BasilASTLoader.transProgram prog
+      try Ast_loader.ast_of_concrete_ast prog
       with exn ->
         let e = Printexc.to_string exn in
         log (Printf.sprintf "%s:\n" e);
