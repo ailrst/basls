@@ -7,7 +7,7 @@
 (library 
  (public_name basil_ast)
  (name basillang)
- (modules basilASTVisitor basilAST cfg)
+ (modules basilASTVisitor basilAST cfg ast_loader)
 (libraries BasilIR
            hashcons
            ocamlgraph

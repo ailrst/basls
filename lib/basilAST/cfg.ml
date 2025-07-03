@@ -84,6 +84,9 @@ let graph_of_proc (p : proc) =
   let blocks = StringMap.of_list blocks in
 
   let g = G.create ~size:(StringMap.cardinal blocks) () in
+
+  let fresh = new Helper.fresh () in
+
   let return_vertex = fresh#get () in
   let unreachable_vertex = fresh#get () in
   G.add_vertex g return_vertex;
@@ -97,8 +100,8 @@ let graph_of_proc (p : proc) =
   let add_block b =
     match b with
     | { begin_loc; end_loc; label; stmts; jump; _ } -> (
-        G.add_vertex g begin_loc;
-        G.add_vertex g end_loc;
+        G.add_vertex g (fresh#get ());
+        G.add_vertex g (fresh#get ());
         let mainedge =
           G.E.create begin_loc (Edge.create_block ~label stmts) end_loc
         in

@@ -25,3 +25,8 @@ It can be configured in neovim with:
     },
 ]}
 
+
+{1 Modules}
+
+- {!module:Basillsp}
+

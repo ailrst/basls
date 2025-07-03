@@ -25,7 +25,7 @@ let output_graph (s : BasilAST.BasilAST.proc list) =
 let process (s : string) =
   let lexbuf = Lexing.from_string s in
   let prog = ParBasilIR.pModuleT LexBasilIR.token lexbuf in
-  let procs = BasilAST.BasilASTLoader.transProgram prog in
+  let procs = Ast_loader.ast_of_concrete_ast prog in
   let oc = open_out "show" in
   List.map (fun p -> BasilAST.BasilAST.show_proc p) procs
   |> List.iter (fun s -> output_string oc s);

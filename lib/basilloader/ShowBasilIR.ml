@@ -38,7 +38,7 @@ let showList (showFun : 'a -> showable) (xs : 'a list) : showable = fun buf ->
 let showInt (i:int) : showable = s2s (string_of_int i)
 let showFloat (f:float) : showable = s2s (string_of_float f)
 
-let rec showBVTYPE (AbsBasilIR.BVTYPE i) : showable = s2s "BVTYPE " >> showString i
+let rec showBVTYPE (AbsBasilIR.BVTYPE (_,i)) : showable = s2s "BVTYPE " >> showString i
 let rec showINTTYPE (AbsBasilIR.INTTYPE (_,i)) : showable = s2s "INTTYPE " >> showString i
 let rec showBOOLTYPE (AbsBasilIR.BOOLTYPE (_,i)) : showable = s2s "BOOLTYPE " >> showString i
 let rec showBIdent (AbsBasilIR.BIdent (_,i)) : showable = s2s "BIdent " >> showString i
@@ -52,8 +52,8 @@ let rec showBeginRec (AbsBasilIR.BeginRec (_,i)) : showable = s2s "BeginRec " >>
 let rec showEndRec (AbsBasilIR.EndRec (_,i)) : showable = s2s "EndRec " >> showString i
 let rec showLambdaSep (AbsBasilIR.LambdaSep i) : showable = s2s "LambdaSep " >> showString i
 let rec showStr (AbsBasilIR.Str i) : showable = s2s "Str " >> showString i
-let rec showIntegerHex (AbsBasilIR.IntegerHex i) : showable = s2s "IntegerHex " >> showString i
-let rec showIntegerDec (AbsBasilIR.IntegerDec i) : showable = s2s "IntegerDec " >> showString i
+let rec showIntegerHex (AbsBasilIR.IntegerHex (_,i)) : showable = s2s "IntegerHex " >> showString i
+let rec showIntegerDec (AbsBasilIR.IntegerDec (_,i)) : showable = s2s "IntegerDec " >> showString i
 
 let rec showModuleT (e : AbsBasilIR.moduleT) : showable = match e with
        AbsBasilIR.Module1 decls -> s2s "Module1" >> c2s ' ' >> c2s '(' >> showList showDecl decls >> c2s ')'

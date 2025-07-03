@@ -80,7 +80,7 @@ rule token =
       | "/*" [^ '*']* '*' ([^ '*' '/'][^ '*']* '*' | '*')* '/'
                 { token lexbuf }
       | rsyms   { let x = lexeme lexbuf in try Hashtbl.find symbol_table x with Not_found -> failwith ("internal lexer error: reserved symbol " ^ x ^ " not found in hashtable") }
-      | bVTYPE  { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BVTYPE l }
+      | bVTYPE  { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BVTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | iNTTYPE { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_INTTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | bOOLTYPE
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BOOLTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
@@ -103,9 +103,9 @@ rule token =
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_LambdaSep l }
       | str     { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Str l }
       | integerHex
-                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerHex l }
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerHex ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | integerDec
-                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerDec l }
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerDec ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | _letter _idchar*
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Ident l }
       | _digit+ { TOK_Integer (int_of_string (lexeme lexbuf)) }
