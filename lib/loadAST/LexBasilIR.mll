@@ -13,7 +13,7 @@ let _ = List.iter (fun (kwd, tok) -> Hashtbl.add symbol_table kwd tok)
 
 let resword_table = Hashtbl.create 81
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
-                  [("axiom", KW_axiom);("memory", KW_memory);("shared", KW_shared);("var", KW_var);("prog", KW_prog);("entry", KW_entry);("le", KW_le);("be", KW_be);("load", KW_load);("store", KW_store);("call", KW_call);("indirect", KW_indirect);("assume", KW_assume);("guard", KW_guard);("assert", KW_assert);("goto", KW_goto);("unreachable", KW_unreachable);("return", KW_return);("block", KW_block);("proc", KW_proc);("true", KW_true);("false", KW_false);("forall", KW_forall);("exists", KW_exists);("old", KW_old);("boolnot", KW_boolnot);("intneg", KW_intneg);("booltobv1", KW_booltobv1);("zero_extend", KW_zero_extend);("sign_extend", KW_sign_extend);("extract", KW_extract);("bvconcat", KW_bvconcat);("eq", KW_eq);("neq", KW_neq);("bvnot", KW_bvnot);("bvneg", KW_bvneg);("bvand", KW_bvand);("bvor", KW_bvor);("bvadd", KW_bvadd);("bvmul", KW_bvmul);("bvudiv", KW_bvudiv);("bvurem", KW_bvurem);("bvshl", KW_bvshl);("bvlshr", KW_bvlshr);("bvnand", KW_bvnand);("bvnor", KW_bvnor);("bvxor", KW_bvxor);("bvxnor", KW_bvxnor);("bvcomp", KW_bvcomp);("bvsub", KW_bvsub);("bvsdiv", KW_bvsdiv);("bvsrem", KW_bvsrem);("bvsmod", KW_bvsmod);("bvashr", KW_bvashr);("bvule", KW_bvule);("bvugt", KW_bvugt);("bvuge", KW_bvuge);("bvult", KW_bvult);("bvslt", KW_bvslt);("bvsle", KW_bvsle);("bvsgt", KW_bvsgt);("bvsge", KW_bvsge);("intadd", KW_intadd);("intmul", KW_intmul);("intsub", KW_intsub);("intdiv", KW_intdiv);("intmod", KW_intmod);("intlt", KW_intlt);("intle", KW_intle);("intgt", KW_intgt);("intge", KW_intge);("booland", KW_booland);("boolor", KW_boolor);("boolimplies", KW_boolimplies);("require", KW_require);("requires", KW_requires);("ensure", KW_ensure);("ensures", KW_ensures);("invariant", KW_invariant);("rely", KW_rely);("guarantee", KW_guarantee)]
+                  [("axiom", KW_axiom);("memory", KW_memory);("shared", KW_shared);("var", KW_var);("prog", KW_prog);("entry", KW_entry);("proc", KW_proc);("le", KW_le);("be", KW_be);("load", KW_load);("store", KW_store);("call", KW_call);("indirect", KW_indirect);("assume", KW_assume);("guard", KW_guard);("assert", KW_assert);("goto", KW_goto);("unreachable", KW_unreachable);("return", KW_return);("block", KW_block);("true", KW_true);("false", KW_false);("forall", KW_forall);("exists", KW_exists);("old", KW_old);("boolnot", KW_boolnot);("intneg", KW_intneg);("booltobv1", KW_booltobv1);("zero_extend", KW_zero_extend);("sign_extend", KW_sign_extend);("extract", KW_extract);("bvconcat", KW_bvconcat);("eq", KW_eq);("neq", KW_neq);("bvnot", KW_bvnot);("bvneg", KW_bvneg);("bvand", KW_bvand);("bvor", KW_bvor);("bvadd", KW_bvadd);("bvmul", KW_bvmul);("bvudiv", KW_bvudiv);("bvurem", KW_bvurem);("bvshl", KW_bvshl);("bvlshr", KW_bvlshr);("bvnand", KW_bvnand);("bvnor", KW_bvnor);("bvxor", KW_bvxor);("bvxnor", KW_bvxnor);("bvcomp", KW_bvcomp);("bvsub", KW_bvsub);("bvsdiv", KW_bvsdiv);("bvsrem", KW_bvsrem);("bvsmod", KW_bvsmod);("bvashr", KW_bvashr);("bvule", KW_bvule);("bvugt", KW_bvugt);("bvuge", KW_bvuge);("bvult", KW_bvult);("bvslt", KW_bvslt);("bvsle", KW_bvsle);("bvsgt", KW_bvsgt);("bvsge", KW_bvsge);("intadd", KW_intadd);("intmul", KW_intmul);("intsub", KW_intsub);("intdiv", KW_intdiv);("intmod", KW_intmod);("intlt", KW_intlt);("intle", KW_intle);("intgt", KW_intgt);("intge", KW_intge);("booland", KW_booland);("boolor", KW_boolor);("boolimplies", KW_boolimplies);("require", KW_require);("requires", KW_requires);("ensure", KW_ensure);("ensures", KW_ensures);("invariant", KW_invariant);("rely", KW_rely);("guarantee", KW_guarantee)]
 
 let unescapeInitTail (s:string) : string =
   let rec unesc s = match s with
@@ -80,7 +80,7 @@ rule token =
       | "/*" [^ '*']* '*' ([^ '*' '/'][^ '*']* '*' | '*')* '/'
                 { token lexbuf }
       | rsyms   { let x = lexeme lexbuf in try Hashtbl.find symbol_table x with Not_found -> failwith ("internal lexer error: reserved symbol " ^ x ^ " not found in hashtable") }
-      | bVTYPE  { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BVTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+      | bVTYPE  { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BVTYPE l }
       | iNTTYPE { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_INTTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | bOOLTYPE
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BOOLTYPE ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
@@ -103,9 +103,9 @@ rule token =
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_LambdaSep l }
       | str     { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Str l }
       | integerHex
-                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerHex ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerHex l }
       | integerDec
-                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerDec ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerDec l }
       | _letter _idchar*
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Ident l }
       | _digit+ { TOK_Integer (int_of_string (lexeme lexbuf)) }

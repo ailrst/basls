@@ -73,45 +73,45 @@ and transIntegerDec (x : integerDec) : result = match x with
 
 
 and transModule (x : moduleT) : result = match x with
-    Module1 declarations -> failure x
+    Module1 decls -> failure x
 
 
-and transGobbleScolon (x : gobbleScolon) : result = match x with
-    EmptyScolon  -> failure x
-  | SomeScolon gobblescolon -> failure x
+and transSemicolons (x : semicolons) : result = match x with
+    Semicolons_Empty  -> failure x
+  | Semicolons_Some semicolons -> failure x
 
 
-and transDeclaration (x : declaration) : result = match x with
-    AxiomDecl (attrdeflist, expr) -> failure x
-  | SharedMemDecl (globalident, type') -> failure x
-  | UnsharedMemDecl (globalident, type') -> failure x
-  | VarDecl (globalident, type') -> failure x
-  | UninterpFunDecl (attrdeflist, globalident, types, type') -> failure x
-  | FunDef (attrdeflist, globalident, paramss, type', expr) -> failure x
-  | ProgDeclWithSpec (procident, attrdeflist, beginlist, progspecs, endlist) -> failure x
-  | ProgDecl (procident, attrdeflist) -> failure x
-  | Procedure (procsig, attrdeflist, procdef) -> failure x
+and transDecl (x : decl) : result = match x with
+    Decl_Axiom (attribset, expr) -> failure x
+  | Decl_SharedMem (globalident, type') -> failure x
+  | Decl_UnsharedMem (globalident, type') -> failure x
+  | Decl_Var (globalident, type') -> failure x
+  | Decl_UninterpFun (attribset, globalident, types, type') -> failure x
+  | Decl_Fun (attribset, globalident, paramss, type', expr) -> failure x
+  | Decl_ProgEmpty (procident, attribset) -> failure x
+  | Decl_ProgWithSpec (procident, attribset, beginlist, progspecs, endlist) -> failure x
+  | Decl_Proc (procident, paramss0, paramss, attribset, funspecs, procdef) -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
-    ProcedureDecl funspecdecls -> failure x
-  | ProcedureDef (funspecdecls, beginlist, blocks, endlist) -> failure x
+    ProcDef_Empty  -> failure x
+  | ProcDef_Some (beginlist, blocks, endlist) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
-    IntT inttype -> failure x
+    IntType1 inttype -> failure x
 
 
 and transBoolType (x : boolType) : result = match x with
-    BoolT booltype -> failure x
+    BoolType1 booltype -> failure x
 
 
 and transMapType (x : mapType) : result = match x with
-    MapT (type'0, type') -> failure x
+    MapType1 (type'0, type') -> failure x
 
 
 and transBVType (x : bVType) : result = match x with
-    BVT bvtype -> failure x
+    BVType1 bvtype -> failure x
 
 
 and transType (x : typeT) : result = match x with
@@ -122,33 +122,33 @@ and transType (x : typeT) : result = match x with
 
 
 and transIntVal (x : intVal) : result = match x with
-    HexInt integerhex -> failure x
-  | DecInt integerdec -> failure x
+    IntVal_Hex integerhex -> failure x
+  | IntVal_Dec integerdec -> failure x
 
 
 and transBVVal (x : bVVal) : result = match x with
-    BV (intval, bvtype) -> failure x
+    BVVal1 (intval, bvtype) -> failure x
 
 
 and transEndian (x : endian) : result = match x with
-    LittleEndian  -> failure x
-  | BigEndian  -> failure x
+    Endian_Little  -> failure x
+  | Endian_Big  -> failure x
 
 
 and transAssignment (x : assignment) : result = match x with
     Assignment1 (lvar, expr) -> failure x
 
 
-and transStatement (x : statement) : result = match x with
-    Assign assignment -> failure x
-  | SimulAssign assignments -> failure x
-  | SLoad (lvar, endian, globalident, expr, intval) -> failure x
-  | SStore (endian, globalident, expr0, expr, intval) -> failure x
-  | DirectCall (calllvars, procident, exprs) -> failure x
-  | IndirectCall expr -> failure x
-  | Assume (expr, attrdeflist) -> failure x
-  | Guard (expr, attrdeflist) -> failure x
-  | Assert (expr, attrdeflist) -> failure x
+and transStmt (x : stmt) : result = match x with
+    Stmt_SingleAssign assignment -> failure x
+  | Stmt_MultiAssign assignments -> failure x
+  | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
+  | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
+  | Stmt_DirectCall (lvars, procident, exprs) -> failure x
+  | Stmt_IndirectCall expr -> failure x
+  | Stmt_Assume (expr, attribset) -> failure x
+  | Stmt_Guard (expr, attribset) -> failure x
+  | Stmt_Assert (expr, attribset) -> failure x
 
 
 and transLocalVar (x : localVar) : result = match x with
@@ -159,72 +159,68 @@ and transGlobalVar (x : globalVar) : result = match x with
     GlobalVar1 (globalident, type') -> failure x
 
 
-and transCallLVars (x : callLVars) : result = match x with
-    NoOutParams  -> failure x
-  | LocalVars localvars -> failure x
-  | ListOutParams lvars -> failure x
+and transLVars (x : lVars) : result = match x with
+    LVars_Empty  -> failure x
+  | LVars_LocalList localvars -> failure x
+  | LVars_List lvars -> failure x
 
 
 and transJump (x : jump) : result = match x with
-    GoTo blockidents -> failure x
-  | Unreachable  -> failure x
-  | Return exprs -> failure x
+    Jump_GoTo blockidents -> failure x
+  | Jump_Unreachable  -> failure x
+  | Jump_Return exprs -> failure x
 
 
 and transLVar (x : lVar) : result = match x with
-    LVarDef localvar -> failure x
-  | GlobalLVar globalvar -> failure x
+    LVar_Local localvar -> failure x
+  | LVar_Global globalvar -> failure x
 
 
 and transBlock (x : block) : result = match x with
-    Block1 (blockident, attrdeflist, beginlist, statements, jump, endlist) -> failure x
+    Block1 (blockident, attribset, beginlist, stmts, jump, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with
-    AttrKeyValue1 (bident, attrvalue) -> failure x
+    AttrKeyValue1 (bident, attr) -> failure x
 
 
-and transAttrDefList (x : attrDefList) : result = match x with
-    AttrDefListSome (beginrec, attrkeyvalues, gobblescolon, endrec) -> failure x
-  | AttrDefListEmpty  -> failure x
+and transAttribSet (x : attribSet) : result = match x with
+    AttribSet_Some (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+  | AttribSet_Empty  -> failure x
 
 
-and transAttrValue (x : attrValue) : result = match x with
-    MapAttr (beginrec, attrkeyvalues, endrec) -> failure x
-  | ListAttr (beginlist, attrvalues, endlist) -> failure x
-  | LiteralAttr value -> failure x
-  | StringAttr str -> failure x
+and transAttr (x : attr) : result = match x with
+    Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+  | Attr_List (beginlist, attrs, endlist) -> failure x
+  | Attr_Lit value -> failure x
+  | Attr_Str str -> failure x
 
 
 and transParams (x : params) : result = match x with
-    Param (localident, type') -> failure x
-
-
-and transProcSig (x : procSig) : result = match x with
-    ProcedureSig (procident, paramss0, paramss) -> failure x
+    Params1 (localident, type') -> failure x
 
 
 and transValue (x : value) : result = match x with
-    BVLiteral bvval -> failure x
-  | IntLiteral intval -> failure x
-  | TrueLiteral  -> failure x
-  | FalseLiteral  -> failure x
+    Value_BV bvval -> failure x
+  | Value_Int intval -> failure x
+  | Value_True  -> failure x
+  | Value_False  -> failure x
 
 
 and transExpr (x : expr) : result = match x with
-    Literal value -> failure x
-  | LRVar localvar -> failure x
-  | GRVar globalvar -> failure x
-  | Forall lambdadef -> failure x
-  | Exists lambdadef -> failure x
-  | OldExpr expr -> failure x
-  | FunctionOp (globalident, exprs) -> failure x
-  | BinaryExpr (binop, expr0, expr) -> failure x
-  | UnaryExpr (unop, expr) -> failure x
-  | ZeroExtend (intval, expr) -> failure x
-  | SignExtend (intval, expr) -> failure x
-  | Extract (intval0, intval, expr) -> failure x
-  | Concat (expr0, expr) -> failure x
+    Expr_Literal value -> failure x
+  | Expr_Local localvar -> failure x
+  | Expr_Global globalvar -> failure x
+  | Expr_Forall lambdadef -> failure x
+  | Expr_Exists lambdadef -> failure x
+  | Expr_Old expr -> failure x
+  | Expr_FunctionOp (globalident, exprs) -> failure x
+  | Expr_Binary (binop, expr0, expr) -> failure x
+  | Expr_Unary (unop, expr) -> failure x
+  | Expr_ZeroExtend (intval, expr) -> failure x
+  | Expr_SignExtend (intval, expr) -> failure x
+  | Expr_Extract (intval0, intval, expr) -> failure x
+  | Expr_Concat (expr0, expr) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
@@ -320,15 +316,15 @@ and transEnsureTok (x : ensureTok) : result = match x with
   | EnsureTok_ensures  -> failure x
 
 
-and transFunSpecDecl (x : funSpecDecl) : result = match x with
-    Require (requiretok, expr) -> failure x
-  | Ensure (ensuretok, expr) -> failure x
-  | LoopInvariant (blockident, expr) -> failure x
+and transFunSpec (x : funSpec) : result = match x with
+    FunSpec_Require (requiretok, expr) -> failure x
+  | FunSpec_Ensure (ensuretok, expr) -> failure x
+  | FunSpec_Invariant (blockident, expr) -> failure x
 
 
 and transProgSpec (x : progSpec) : result = match x with
-    Rely expr -> failure x
-  | Guarantee expr -> failure x
+    ProgSpec_Rely expr -> failure x
+  | ProgSpec_Guarantee expr -> failure x
 
 
 
