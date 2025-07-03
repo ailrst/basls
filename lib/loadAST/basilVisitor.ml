@@ -12,11 +12,11 @@ open BasilIR.AbsBasilIR
 open Common.Visitor
 
 class type basilVisitor = object
-  method vdecl : declaration -> declaration visitAction
+  method vdecl : decl -> decl visitAction
   method vprog : moduleT -> moduleT visitAction
   method vproc : procDef -> procDef visitAction
   method vblock : block -> block visitAction
-  method vstmt : statement -> statement visitAction
+  method vstmt : stmt -> stmt visitAction
   method vjump : jump -> jump visitAction
   method vtype : typeT -> typeT visitAction
   method vexpr : expr -> expr visitAction
@@ -55,27 +55,27 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_procdef (p : procDef) : procDef =
       let ndef v def =
         match def with
-        | ProcedureDecl specList as decl -> decl
-        | ProcedureDef (specList, b, blocks, e) ->
+        | ProcDef_Empty as decl -> decl
+        | ProcDef_Some (beginList, blocks, endList) ->
             let blocks = mapNoCopy self#visit_block blocks in
-            ProcedureDef (specList, b, blocks, e)
+            ProcDef_Some (beginList, blocks, endList)
       in
       doVisit vis (vis#vproc p) ndef p
 
-    method visit_decl (p : declaration) : declaration =
+    method visit_decl (p : decl) : decl =
       let next _ p =
         match p with
-        | AxiomDecl _ -> p
-        | ProgDecl _ -> p
-        | ProgDeclWithSpec _ -> p
-        | SharedMemDecl _ -> p
-        | UnsharedMemDecl _ -> p
-        | VarDecl _ -> p
-        | UninterpFunDecl _ -> p
-        | FunDef _ -> p
-        | Procedure (procSig, attrs, def) ->
-            let ndef = self#visit_procdef def in
-            Procedure (procSig, attrs, ndef)
+        | Decl_Axiom _ -> p
+        | Decl_ProgEmpty _ -> p
+        | Decl_ProgWithSpec _ -> p
+        | Decl_SharedMem _ -> p
+        | Decl_UnsharedMem _ -> p
+        | Decl_Var _ -> p
+        | Decl_UninterpFun _ -> p
+        | Decl_Fun _ -> p
+        | Decl_Proc (pident, inparam, outparam, attrs, specs, def) ->
+            let def = self#visit_procdef def in
+            Decl_Proc (pident, inparam, outparam, attrs, specs, def)
       in
       doVisit vis (vis#vdecl p) next p
 
@@ -87,62 +87,63 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
               ( bg,
                 label,
                 addr,
-                mapNoCopy self#visit_statement stmts,
+                mapNoCopy self#visit_stmt stmts,
                 self#visit_jump j,
                 ed )
       in
       doVisit vis (vis#vblock b) next b
 
-    method visit_statement (s : statement) : statement =
+    method visit_stmt (s : stmt) : stmt =
       let next _ b =
         match b with
-        | Assign (Assignment1 (o, expr)) ->
-            Assign (Assignment1 (self#visit_lvar o, self#visit_expr expr))
-        | SimulAssign alist ->
-            SimulAssign
+        | Stmt_SingleAssign (Assignment1 (o, expr)) ->
+            Stmt_SingleAssign
+              (Assignment1 (self#visit_lvar o, self#visit_expr expr))
+        | Stmt_MultiAssign alist ->
+            Stmt_MultiAssign
               (List.map
                  (function
                    | Assignment1 (o, expr) ->
                        Assignment1 (self#visit_lvar o, self#visit_expr expr))
                  alist)
-        | SLoad (lVar, endian, memory, addr, size) ->
+        | Stmt_Load (lVar, endian, memory, addr, size) ->
             let nlv = self#visit_lvar lVar in
             let nadr = self#visit_expr addr in
             if nlv <> lVar || nadr <> addr then
-              SLoad (nlv, endian, memory, nadr, size)
+              Stmt_Load (nlv, endian, memory, nadr, size)
             else b
-        | SStore (endian, bIdent, addr, value, size) ->
+        | Stmt_Store (endian, bIdent, addr, value, size) ->
             let nadr = self#visit_expr addr in
             let nvalue = self#visit_expr value in
             if nadr <> addr || nvalue <> value then
-              SStore (endian, bIdent, nadr, nvalue, size)
+              Stmt_Store (endian, bIdent, nadr, nvalue, size)
             else b
-        | DirectCall (callLVars, bIdent, actual_params) ->
+        | Stmt_DirectCall (callLVars, bIdent, actual_params) ->
             let params = mapNoCopy self#visit_expr actual_params in
             if params <> actual_params then
-              DirectCall (callLVars, bIdent, params)
+              Stmt_DirectCall (callLVars, bIdent, params)
             else b
-        | IndirectCall expr ->
+        | Stmt_IndirectCall expr ->
             let ne = self#visit_expr expr in
-            if ne <> expr then IndirectCall ne else b
-        | Assume (expr, attr) ->
+            if ne <> expr then Stmt_IndirectCall ne else b
+        | Stmt_Assume (expr, attr) ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Assume (ne, attr) else b
-        | Guard (expr, attr) ->
+            if ne <> expr then Stmt_Assume (ne, attr) else b
+        | Stmt_Guard (expr, attr) ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Guard (ne, attr) else b
-        | Assert (expr, attr) ->
+            if ne <> expr then Stmt_Guard (ne, attr) else b
+        | Stmt_Assert (expr, attr) ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Assert (ne, attr) else b
+            if ne <> expr then Stmt_Assert (ne, attr) else b
       in
       doVisit vis (vis#vstmt s) next s
 
     method visit_jump (j : jump) : jump =
       let next _ j =
         match j with
-        | Return params ->
+        | Jump_Return params ->
             let np = mapNoCopy self#visit_expr params in
-            if np <> params then Return np else j
+            if np <> params then Jump_Return np else j
         | j -> j
       in
       doVisit vis (vis#vjump j) next j
@@ -150,35 +151,35 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_expr (e : expr) =
       let next _ e =
         match e with
-        | GRVar rvar -> e
-        | LRVar rvar -> e
-        | BinaryExpr (binOp, l, r) ->
+        | Expr_Global rvar -> e
+        | Expr_Local rvar -> e
+        | Expr_Binary (binOp, l, r) ->
             let nl = self#visit_expr l in
             let nr = self#visit_expr r in
-            if nl <> l || nr <> r then BinaryExpr (binOp, nl, nr) else e
-        | UnaryExpr (unOp, l) ->
+            if nl <> l || nr <> r then Expr_Binary (binOp, nl, nr) else e
+        | Expr_Unary (unOp, l) ->
             let nl = self#visit_expr l in
-            if nl <> l then UnaryExpr (unOp, l) else e
-        | ZeroExtend (intVal, expr) ->
+            if nl <> l then Expr_Unary (unOp, l) else e
+        | Expr_ZeroExtend (intVal, expr) ->
             let nl = self#visit_expr expr in
-            if nl <> expr then ZeroExtend (intVal, expr) else e
-        | SignExtend (intVal, expr) ->
+            if nl <> expr then Expr_ZeroExtend (intVal, expr) else e
+        | Expr_SignExtend (intVal, expr) ->
             let nl = self#visit_expr expr in
-            if nl <> expr then SignExtend (intVal, expr) else e
-        | Extract (upper, lower, expr) ->
+            if nl <> expr then Expr_SignExtend (intVal, expr) else e
+        | Expr_Extract (upper, lower, expr) ->
             let nl = self#visit_expr expr in
-            if nl <> expr then Extract (upper, lower, expr) else e
-        | Concat (l, r) ->
+            if nl <> expr then Expr_Extract (upper, lower, expr) else e
+        | Expr_Concat (l, r) ->
             let nl = self#visit_expr l in
             let nr = self#visit_expr r in
-            if nl <> l || nr <> r then Concat (nl, nr) else e
-        | Literal l -> Literal l
-        | Forall l -> Forall l
-        | Exists l -> Exists l
-        | OldExpr e -> OldExpr (self#visit_expr e)
-        | FunctionOp (i, param) ->
+            if nl <> l || nr <> r then Expr_Concat (nl, nr) else e
+        | Expr_Literal l -> Expr_Literal l
+        | Expr_Forall l -> Expr_Forall l
+        | Expr_Exists l -> Expr_Exists l
+        | Expr_Old e -> Expr_Old (self#visit_expr e)
+        | Expr_FunctionOp (i, param) ->
             let param = mapNoCopy self#visit_expr param in
-            FunctionOp (i, param)
+            Expr_FunctionOp (i, param)
       in
       doVisit vis (vis#vexpr e) next e
 
@@ -190,11 +191,11 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
 
 class nopBasilVisitor : basilVisitor =
   object
-    method vdecl (_ : declaration) = DoChildren
+    method vdecl (_ : decl) = DoChildren
     method vprog (_ : moduleT) = DoChildren
     method vproc (_ : procDef) = DoChildren
     method vblock (_ : block) = DoChildren
-    method vstmt (_ : statement) = DoChildren
+    method vstmt (_ : stmt) = DoChildren
     method vjump (_ : jump) = DoChildren
     method vtype (_ : typeT) = DoChildren
     method vexpr (_ : expr) = DoChildren
