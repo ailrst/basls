@@ -33,7 +33,7 @@ module Processor = struct
     all_tokens : SemanticTokensProcessor.t;
   }
 
-  let get_semantic_token_map (s : symbs) =
+  let semantic_tokens_from_symbs (s : symbs) =
     SemanticTokensProcessor.empty
     |> SemanticTokensProcessor.add (StringMap.to_seq s.proc_defs)
          (fun (_, di) ->
@@ -47,11 +47,9 @@ module Processor = struct
          { token_type = "method"; token_modifiers = [] }
     |> SemanticTokensProcessor.add_tokmap s.proc_refs
          { token_type = "class"; token_modifiers = [] }
-    |> TokenMap.union (fun i a b -> Some a) s.all_tokens
 
   let to_semantic_highlight_data (s : symbs) =
-    SemanticTokensProcessor.to_semantic_tokens_full
-      (get_semantic_token_map s)
+    SemanticTokensProcessor.to_semantic_tokens_full s.all_tokens
 
   let get_syms (s : symbs) : Linol_lwt.DocumentSymbol.t list =
     let block_sym (blockname : string) (def : def_info) =
@@ -197,15 +195,28 @@ module Processor = struct
 
   let process_cast (linebreaks : linebreaks) (p : moduleT) : symbs =
     let vis = new getBlocks linebreaks in
+
+    let stokens =
+      Semantic_tokens.SemanticTokensFromAST.get_semtokens_of_cast linebreaks
+        p
+    in
+
     let _ = visit_prog vis p in
-    {
-      proc_defs = vis#get_proc_defs;
-      proc_children = vis#get_proc_children;
-      block_defs = vis#get_block_defs;
-      proc_refs = vis#get_proc_refs;
-      block_refs = vis#get_block_refs;
-      all_tokens =
-        Semantic_tokens.SemanticTokensFromAST.get_semtokens_of_cast
-          linebreaks p;
-    }
+    let sym0 =
+      {
+        proc_defs = vis#get_proc_defs;
+        proc_children = vis#get_proc_children;
+        block_defs = vis#get_block_defs;
+        proc_refs = vis#get_proc_refs;
+        block_refs = vis#get_block_refs;
+        all_tokens = SemanticTokensProcessor.empty;
+      }
+    in
+    let all_tokens =
+      TokenMap.union
+        (fun i a b -> Some a)
+        stokens
+        (semantic_tokens_from_symbs sym0)
+    in
+    { sym0 with all_tokens }
 end
