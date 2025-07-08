@@ -56,7 +56,7 @@ Decl_Proc . Decl ::= "proc" ProcIdent "(" [Params] ")" "->" "(" [Params] ")" Att
 ProcDef_Empty . ProcDef ::= "";
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
-IntType1 . IntType ::= INTTYPE;
+IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
 MapType1 . MapType ::=  "(" Type "->" Type ")";
 BVType1 . BVType ::= BVTYPE ;
@@ -73,11 +73,9 @@ rules BVVal ::=  IntVal ":" BVType ;
 Endian_Little . Endian ::= "le" ;
 Endian_Big . Endian ::= "be" ;
 
-terminator Stmt ";";
-
 rules Assignment ::= LVar ":=" Expr ;
 
-Stmt_SingleAssign . Stmt ::= Assignment;
+Stmt_SingleAssign . Stmt ::= Assignment ;
 
 separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= "(" [Assignment]  ")" ;
@@ -96,9 +94,9 @@ LVars_List . LVars ::= "(" [ LVar ] ")" ":=";
 Stmt_DirectCall . Stmt ::= LVars "call" ProcIdent "(" [Expr] ")" ;
 Stmt_IndirectCall . Stmt ::= "indirect" "call" Expr ;
 
-Stmt_Assume . Stmt ::= "assume" Expr AttribSet ;
-Stmt_Guard . Stmt ::= "guard" Expr AttribSet ;
-Stmt_Assert . Stmt ::= "assert" Expr AttribSet ;
+Stmt_Assume . Stmt ::= "assume" Expr ;
+Stmt_Guard . Stmt ::= "guard" Expr ;
+Stmt_Assert . Stmt ::= "assert" Expr ;
 
 Jump_GoTo . Jump ::= "goto" "(" [BlockIdent] ")" ;
 Jump_Unreachable . Jump ::= "unreachable" ;
@@ -111,10 +109,14 @@ separator nonempty LVar "," ;
 
 separator Block ";" ;
 
-rules Block ::= "block" BlockIdent AttribSet BeginList 
-  [Stmt] Jump ";"
-  EndList ;
+rules StmtWithAttrib ::= Stmt AttribSet ;
+terminator StmtWithAttrib ";";
 
+rules JumpWithAttrib ::= Jump AttribSet ;
+
+rules Block ::= "block" BlockIdent AttribSet BeginList 
+  [StmtWithAttrib] JumpWithAttrib ";"
+  EndList ;
 
 rules AttrKeyValue ::= BIdent "=" Attr ;
 separator AttrKeyValue ";";
