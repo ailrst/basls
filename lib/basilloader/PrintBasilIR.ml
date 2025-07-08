@@ -215,13 +215,11 @@ and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, exprs) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
   |    AbsBasilIR.Stmt_IndirectCall expr -> prPrec i 0 (concatD [render "indirect" ; render "call" ; prtExpr 0 expr])
-  |    AbsBasilIR.Stmt_Assume (expr, attribset) -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr ; prtAttribSet 0 attribset])
-  |    AbsBasilIR.Stmt_Guard (expr, attribset) -> prPrec i 0 (concatD [render "guard" ; prtExpr 0 expr ; prtAttribSet 0 attribset])
-  |    AbsBasilIR.Stmt_Assert (expr, attribset) -> prPrec i 0 (concatD [render "assert" ; prtExpr 0 expr ; prtAttribSet 0 attribset])
+  |    AbsBasilIR.Stmt_Assume expr -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr])
+  |    AbsBasilIR.Stmt_Guard expr -> prPrec i 0 (concatD [render "guard" ; prtExpr 0 expr])
+  |    AbsBasilIR.Stmt_Assert expr -> prPrec i 0 (concatD [render "assert" ; prtExpr 0 expr])
 
-and prtStmtListBNFC i es : doc = match (i, es) with
-    (_,[]) -> (concatD [])
-  | (_,x::xs) -> (concatD [prtStmt 0 x ; render ";" ; prtStmtListBNFC 0 xs])
+
 and prtLocalVar (i:int) (e : AbsBasilIR.localVar) : doc = match e with
        AbsBasilIR.LocalVar1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
 
@@ -253,8 +251,18 @@ and prtLVarListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtLVar 0 x])
   | (_,x::xs) -> (concatD [prtLVar 0 x ; render "," ; prtLVarListBNFC 0 xs])
+and prtStmtWithAttrib (i:int) (e : AbsBasilIR.stmtWithAttrib) : doc = match e with
+       AbsBasilIR.StmtWithAttrib1 (stmt, attribset) -> prPrec i 0 (concatD [prtStmt 0 stmt ; prtAttribSet 0 attribset])
+
+and prtStmtWithAttribListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,x::xs) -> (concatD [prtStmtWithAttrib 0 x ; render ";" ; prtStmtWithAttribListBNFC 0 xs])
+and prtJumpWithAttrib (i:int) (e : AbsBasilIR.jumpWithAttrib) : doc = match e with
+       AbsBasilIR.JumpWithAttrib1 (jump, attribset) -> prPrec i 0 (concatD [prtJump 0 jump ; prtAttribSet 0 attribset])
+
+
 and prtBlock (i:int) (e : AbsBasilIR.block) : doc = match e with
-       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmts, jump, endlist) -> prPrec i 0 (concatD [render "block" ; prtBlockIdent 0 blockident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; prtStmtListBNFC 0 stmts ; prtJump 0 jump ; render ";" ; prtEndList 0 endlist])
+       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> prPrec i 0 (concatD [render "block" ; prtBlockIdent 0 blockident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; prtStmtWithAttribListBNFC 0 stmtwithattribs ; prtJumpWithAttrib 0 jumpwithattrib ; render ";" ; prtEndList 0 endlist])
 
 and prtBlockListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

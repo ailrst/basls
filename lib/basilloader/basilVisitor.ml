@@ -82,13 +82,18 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
     method visit_block (b : block) : block =
       let next _ b =
         match b with
-        | Block1 (bg, label, addr, stmts, j, ed) ->
+        | Block1
+            (bg, label, addr, stmts, JumpWithAttrib1 (j, jump_attrib), ed) ->
             Block1
               ( bg,
                 label,
                 addr,
-                mapNoCopy self#visit_stmt stmts,
-                self#visit_jump j,
+                mapNoCopy
+                  (function
+                    | StmtWithAttrib1 (stmt, attrib) ->
+                        StmtWithAttrib1 (self#visit_stmt stmt, attrib))
+                  stmts,
+                JumpWithAttrib1 (self#visit_jump j, jump_attrib),
                 ed )
       in
       doVisit vis (vis#vblock b) next b
@@ -126,15 +131,15 @@ class virtual basilTreeVisitor (vis : #basilVisitor) =
         | Stmt_IndirectCall expr ->
             let ne = self#visit_expr expr in
             if ne <> expr then Stmt_IndirectCall ne else b
-        | Stmt_Assume (expr, attr) ->
+        | Stmt_Assume expr ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Stmt_Assume (ne, attr) else b
-        | Stmt_Guard (expr, attr) ->
+            if ne <> expr then Stmt_Assume ne else b
+        | Stmt_Guard expr ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Stmt_Guard (ne, attr) else b
-        | Stmt_Assert (expr, attr) ->
+            if ne <> expr then Stmt_Guard ne else b
+        | Stmt_Assert expr ->
             let ne = self#visit_expr expr in
-            if ne <> expr then Stmt_Assert (ne, attr) else b
+            if ne <> expr then Stmt_Assert ne else b
       in
       doVisit vis (vis#vstmt s) next s
 
