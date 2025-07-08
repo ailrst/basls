@@ -146,9 +146,9 @@ and transStmt (x : stmt) : result = match x with
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, exprs) -> failure x
   | Stmt_IndirectCall expr -> failure x
-  | Stmt_Assume (expr, attribset) -> failure x
-  | Stmt_Guard (expr, attribset) -> failure x
-  | Stmt_Assert (expr, attribset) -> failure x
+  | Stmt_Assume expr -> failure x
+  | Stmt_Guard expr -> failure x
+  | Stmt_Assert expr -> failure x
 
 
 and transLocalVar (x : localVar) : result = match x with
@@ -176,8 +176,16 @@ and transLVar (x : lVar) : result = match x with
   | LVar_Global globalvar -> failure x
 
 
+and transStmtWithAttrib (x : stmtWithAttrib) : result = match x with
+    StmtWithAttrib1 (stmt, attribset) -> failure x
+
+
+and transJumpWithAttrib (x : jumpWithAttrib) : result = match x with
+    JumpWithAttrib1 (jump, attribset) -> failure x
+
+
 and transBlock (x : block) : result = match x with
-    Block1 (blockident, attribset, beginlist, stmts, jump, endlist) -> failure x
+    Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with

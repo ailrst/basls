@@ -80,8 +80,10 @@ module BasilASTLoader = struct
   and transEndian (x : BasilIR.AbsBasilIR.endian) : BasilAST.endian =
     match x with Endian_Little -> LittleEndian | Endian_Big -> BigEndian
 
-  and transStatement (x : BasilIR.AbsBasilIR.stmt) : BasilAST.statement =
-    match x with
+  and transStatement (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
+      BasilAST.statement =
+    let stmt = match x with StmtWithAttrib1 (stmt, _) -> stmt in
+    match stmt with
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         Assign [ (transLVar lvar, transExpr expr) ]
     | Stmt_MultiAssign assigns ->
@@ -109,9 +111,9 @@ module BasilASTLoader = struct
             unsafe_unsigil (`Proc bident),
             List.map transExpr exprs )
     | Stmt_IndirectCall expr -> IndirectCall (transExpr expr)
-    | Stmt_Assume (expr, _) -> Assume (transExpr expr)
-    | Stmt_Guard (expr, _) -> Assume (transExpr expr)
-    | Stmt_Assert (expr, _) -> Assert (transExpr expr)
+    | Stmt_Assume expr -> Assume (transExpr expr)
+    | Stmt_Guard expr -> Assume (transExpr expr)
+    | Stmt_Assert expr -> Assert (transExpr expr)
 
   and transCallLVars (x : lVars) : lVar list =
     match x with
@@ -128,8 +130,9 @@ module BasilASTLoader = struct
         | LocalVar1 (i, t) -> (unsafe_unsigil (`Local i), transType t))
       lvs
 
-  and transJump (x : BasilIR.AbsBasilIR.jump) : jump =
-    match x with
+  and transJump (x : BasilIR.AbsBasilIR.jumpWithAttrib) : jump =
+    let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
+    match jump with
     | Jump_GoTo bidents ->
         GoTo (List.map (fun i -> unsafe_unsigil (`Block i)) bidents)
     | Jump_Unreachable -> Unreachable

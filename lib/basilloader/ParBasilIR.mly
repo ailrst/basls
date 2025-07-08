@@ -43,7 +43,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pStmt_list pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pLVars pJump pLVar pLVar_list pBlock_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pLVars pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -60,7 +60,6 @@ open Lexing
 %type <AbsBasilIR.intVal> pIntVal
 %type <AbsBasilIR.bVVal> pBVVal
 %type <AbsBasilIR.endian> pEndian
-%type <AbsBasilIR.stmt list> pStmt_list
 %type <AbsBasilIR.assignment> pAssignment
 %type <AbsBasilIR.stmt> pStmt
 %type <AbsBasilIR.assignment list> pAssignment_list
@@ -72,6 +71,9 @@ open Lexing
 %type <AbsBasilIR.lVar> pLVar
 %type <AbsBasilIR.lVar list> pLVar_list
 %type <AbsBasilIR.block list> pBlock_list
+%type <AbsBasilIR.stmtWithAttrib> pStmtWithAttrib
+%type <AbsBasilIR.stmtWithAttrib list> pStmtWithAttrib_list
+%type <AbsBasilIR.jumpWithAttrib> pJumpWithAttrib
 %type <AbsBasilIR.block> pBlock
 %type <AbsBasilIR.attrKeyValue> pAttrKeyValue
 %type <AbsBasilIR.attrKeyValue list> pAttrKeyValue_list
@@ -115,7 +117,6 @@ open Lexing
 %type <AbsBasilIR.intVal> intVal
 %type <AbsBasilIR.bVVal> bVVal
 %type <AbsBasilIR.endian> endian
-%type <AbsBasilIR.stmt list> stmt_list
 %type <AbsBasilIR.assignment> assignment
 %type <AbsBasilIR.stmt> stmt
 %type <AbsBasilIR.assignment list> assignment_list
@@ -127,6 +128,9 @@ open Lexing
 %type <AbsBasilIR.lVar> lVar
 %type <AbsBasilIR.lVar list> lVar_list
 %type <AbsBasilIR.block list> block_list
+%type <AbsBasilIR.stmtWithAttrib> stmtWithAttrib
+%type <AbsBasilIR.stmtWithAttrib list> stmtWithAttrib_list
+%type <AbsBasilIR.jumpWithAttrib> jumpWithAttrib
 %type <AbsBasilIR.block> block
 %type <AbsBasilIR.attrKeyValue> attrKeyValue
 %type <AbsBasilIR.attrKeyValue list> attrKeyValue_list
@@ -205,8 +209,6 @@ pBVVal : bVVal TOK_EOF { $1 };
 
 pEndian : endian TOK_EOF { $1 };
 
-pStmt_list : stmt_list TOK_EOF { $1 };
-
 pAssignment : assignment TOK_EOF { $1 };
 
 pStmt : stmt TOK_EOF { $1 };
@@ -228,6 +230,12 @@ pLVar : lVar TOK_EOF { $1 };
 pLVar_list : lVar_list TOK_EOF { $1 };
 
 pBlock_list : block_list TOK_EOF { $1 };
+
+pStmtWithAttrib : stmtWithAttrib TOK_EOF { $1 };
+
+pStmtWithAttrib_list : stmtWithAttrib_list TOK_EOF { $1 };
+
+pJumpWithAttrib : jumpWithAttrib TOK_EOF { $1 };
 
 pBlock : block TOK_EOF { $1 };
 
@@ -351,10 +359,6 @@ endian : KW_le { Endian_Little  }
   | KW_be { Endian_Big  }
   ;
 
-stmt_list : /* empty */ { []  }
-  | stmt SYMB1 stmt_list { (fun (x,xs) -> x::xs) ($1, $3) }
-  ;
-
 assignment : lVar SYMB10 expr { Assignment1 ($1, $3) }
   ;
 
@@ -364,9 +368,9 @@ stmt : assignment { Stmt_SingleAssign $1 }
   | KW_store endian globalIdent expr expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent SYMB5 expr_list SYMB6 { Stmt_DirectCall ($1, $3, $5) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
-  | KW_assume expr attribSet { Stmt_Assume ($2, $3) }
-  | KW_guard expr attribSet { Stmt_Guard ($2, $3) }
-  | KW_assert expr attribSet { Stmt_Assert ($2, $3) }
+  | KW_assume expr { Stmt_Assume $2 }
+  | KW_guard expr { Stmt_Guard $2 }
+  | KW_assert expr { Stmt_Assert $2 }
   ;
 
 assignment_list : assignment { (fun x -> [x]) $1 }
@@ -406,7 +410,17 @@ block_list : /* empty */ { []  }
   | block SYMB1 block_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-block : KW_block blockIdent attribSet beginList stmt_list jump SYMB1 endList { Block1 ($2, $3, $4, $5, $6, $8) }
+stmtWithAttrib : stmt attribSet { StmtWithAttrib1 ($1, $2) }
+  ;
+
+stmtWithAttrib_list : /* empty */ { []  }
+  | stmtWithAttrib SYMB1 stmtWithAttrib_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+jumpWithAttrib : jump attribSet { JumpWithAttrib1 ($1, $2) }
+  ;
+
+block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block1 ($2, $3, $4, $5, $6, $8) }
   ;
 
 attrKeyValue : bIdent SYMB9 attr { AttrKeyValue1 ($1, $3) }

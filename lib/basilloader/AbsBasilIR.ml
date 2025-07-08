@@ -77,9 +77,9 @@ and stmt =
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * expr list
  | Stmt_IndirectCall of expr
- | Stmt_Assume of expr * attribSet
- | Stmt_Guard of expr * attribSet
- | Stmt_Assert of expr * attribSet
+ | Stmt_Assume of expr
+ | Stmt_Guard of expr
+ | Stmt_Assert of expr
 
 and localVar =
    LocalVar1 of localIdent * typeT
@@ -101,8 +101,14 @@ and lVar =
    LVar_Local of localVar
  | LVar_Global of globalVar
 
+and stmtWithAttrib =
+   StmtWithAttrib1 of stmt * attribSet
+
+and jumpWithAttrib =
+   JumpWithAttrib1 of jump * attribSet
+
 and block =
-   Block1 of blockIdent * attribSet * beginList * stmt list * jump * endList
+   Block1 of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr

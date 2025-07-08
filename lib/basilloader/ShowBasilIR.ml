@@ -129,9 +129,9 @@ and showStmt (e : AbsBasilIR.stmt) : showable = match e with
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, exprs) -> s2s "Stmt_DirectCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Stmt_IndirectCall expr -> s2s "Stmt_IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.Stmt_Assume (expr, attribset) -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
-  |    AbsBasilIR.Stmt_Guard (expr, attribset) -> s2s "Stmt_Guard" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
-  |    AbsBasilIR.Stmt_Assert (expr, attribset) -> s2s "Stmt_Assert" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
+  |    AbsBasilIR.Stmt_Assume expr -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+  |    AbsBasilIR.Stmt_Guard expr -> s2s "Stmt_Guard" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+  |    AbsBasilIR.Stmt_Assert expr -> s2s "Stmt_Assert" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
 
 
 and showLocalVar (e : AbsBasilIR.localVar) : showable = match e with
@@ -159,8 +159,16 @@ and showLVar (e : AbsBasilIR.lVar) : showable = match e with
   |    AbsBasilIR.LVar_Global globalvar -> s2s "LVar_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
+and showStmtWithAttrib (e : AbsBasilIR.stmtWithAttrib) : showable = match e with
+       AbsBasilIR.StmtWithAttrib1 (stmt, attribset) -> s2s "StmtWithAttrib1" >> c2s ' ' >> c2s '(' >> showStmt stmt  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
+
+
+and showJumpWithAttrib (e : AbsBasilIR.jumpWithAttrib) : showable = match e with
+       AbsBasilIR.JumpWithAttrib1 (jump, attribset) -> s2s "JumpWithAttrib1" >> c2s ' ' >> c2s '(' >> showJump jump  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
+
+
 and showBlock (e : AbsBasilIR.block) : showable = match e with
-       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmts, jump, endlist) -> s2s "Block1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmt stmts  >> s2s ", " >>  showJump jump  >> s2s ", " >>  showEndList endlist >> c2s ')'
+       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with
