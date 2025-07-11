@@ -87,43 +87,53 @@ let graph_of_proc (p : proc) =
 
   let fresh = new Helper.fresh () in
 
+  let _ = fresh#get () in
+
   let return_vertex = fresh#get () in
   let unreachable_vertex = fresh#get () in
   G.add_vertex g return_vertex;
   G.add_vertex g unreachable_vertex;
 
-  Option.iter (fun p -> print_endline p) p.entry;
-  let entry =
-    Option.map (fun b -> (StringMap.find b blocks).begin_loc) p.entry
-  in
-
-  let add_block b =
+  let add_block (b : block) : int * int =
     match b with
-    | { begin_loc; end_loc; label; stmts; jump; _ } -> (
-        G.add_vertex g (fresh#get ());
-        G.add_vertex g (fresh#get ());
+    | { label; stmts; jump; _ } ->
+        let begin_vert = fresh#get () in
+        let end_vert = fresh#get () in
+        G.add_vertex g begin_vert;
+        G.add_vertex g end_vert;
         let mainedge =
-          G.E.create begin_loc (Edge.create_block ~label stmts) end_loc
+          G.E.create begin_vert (Edge.create_block ~label stmts) end_vert
         in
         G.add_edge_e g mainedge;
+        (begin_vert, end_vert)
+  in
+
+  let add_jump verts b =
+    match b with
+    | { label; stmts; jump; _ } -> (
+        let begin_vert, end_vert = StringMap.find label verts in
         match jump with
         | GoTo labels ->
             let targets =
-              List.map
-                (fun l -> StringMap.find l blocks |> fun l -> l.begin_loc)
-                labels
+              List.map (fun l -> StringMap.find l verts |> fst) labels
             in
             let edges =
-              List.map (fun t -> G.E.create end_loc Edge.GoTo t) targets
+              List.map (fun t -> G.E.create end_vert Edge.GoTo t) targets
             in
             List.iter (G.add_edge_e g) edges;
             ()
-        | Unreachable -> G.add_edge g end_loc unreachable_vertex
+        | Unreachable -> G.add_edge g end_vert unreachable_vertex
         | Return x ->
-            G.add_edge_e g (G.E.create end_loc (Edge.Return x) return_vertex)
-        )
+            G.add_edge_e g
+              (G.E.create end_vert (Edge.Return x) return_vertex))
   in
-  StringMap.iter (fun lab b -> add_block b) blocks;
+
+  let verts = StringMap.map add_block blocks in
+
+  StringMap.iter (fun i b -> add_jump verts b) blocks;
+
+  let entry = Option.map (fun b -> fst (StringMap.find b verts)) p.entry in
+
   { entry; return_vertex; unreachable_vertex; graph = g }
 
 module GG =
@@ -133,14 +143,31 @@ module Dot = Graph.Graphviz.Dot (struct
   include G
   include Graph.Pack
 
+  let addind ind = if ind <= 4  then 4 else 2
+
   let safe_label s =
+    let wrap = 100 in
+    let slack = 30 in
+    let wrap_p = [ ';'; ')'; '(' ;' ' ] in
     "\\l"
-    ^ (String.to_seq s
-      |> Seq.map (function
-           | '\n' -> "\\l"
-           | '"' -> "\\\""
-           | c -> String.make 1 c)
-      |> List.of_seq |> String.concat "")
+    ^ (String.to_list s
+      |> List.fold_left_map
+           (fun (l, ind) c ->
+             match c with
+             | '\n' -> ((0, 0), "\\l")
+             | '"' -> ((l, ind), "\\\"")
+             | c
+               when l >= wrap - slack
+                    && List.find_opt (function y -> Char.equal y c) wrap_p
+                       |> Option.is_some ->
+                 let ind = addind ind in
+                 ((0, ind), String.of_char c ^ "\\l" ^ String.make ind ' ' )
+             | c when l >= wrap ->
+                 let ind = addind ind in
+                 ((0, ind), "\\l" ^ String.make ind ' ' ^ String.of_char c)
+             | c -> ((l + 1, ind), String.make 1 c))
+           (0, 0)
+      |> snd |> String.concat "")
     ^ "\\l"
 
   let edge_attributes (e : E.t) =

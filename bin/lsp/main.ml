@@ -10,7 +10,7 @@ open Basillsp.Semantic_tokens
 open Basillsp.Process_doc
 open Common.Util
 
-let debug = false
+let debug = true
 let oc = if debug then Some (open_out ".basillsplog") else None
 
 let log (s : string) =
